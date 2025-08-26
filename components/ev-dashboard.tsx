@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -11,89 +11,92 @@ import { DataFlowDiagram } from "@/components/data-flow-diagram"
 import { AnalyticsChart } from "@/components/analytics-chart"
 import { Battery, Zap, Gauge, BarChart3, TrendingUp, Thermometer, Car } from "lucide-react"
 
-const mockData = {
-  porter2: {
-    bms: {
-      soc: 78.4,
-      soh: 94.5,
-      pack_volt: 458.1,
-      pack_current: -12.3,
-      odometer: 89048,
-      batt_internal_temp: 22.5,
-      max_cell_volt: 4.15,
-      min_cell_volt: 4.12,
-      chrg_cable_conn: 1,
-      fast_chrg_port_conn: 0,
-      slow_chrg_port_conn: 1,
-      est_chrg_time: 135, // minutes
-      cumul_energy_chrgd: 2847.5,
-    },
-    gps: {
-      speed: 0,
-      fuel_pct: 78.4,
-      lat: 37.5665,
-      lng: 126.978,
-      mode: "ECO",
-      state: "PARKED",
-    },
-  },
-  gv60: {
-    bms: {
-      soc: 85.2,
-      soh: 96.8,
-      pack_volt: 412.7,
-      pack_current: 0,
-      odometer: 45230,
-      batt_internal_temp: 24.1,
-      max_cell_volt: 4.18,
-      min_cell_volt: 4.16,
-      chrg_cable_conn: 0,
-      fast_chrg_port_conn: 0,
-      slow_chrg_port_conn: 0,
-      est_chrg_time: 0,
-      cumul_energy_chrgd: 1892.3,
-    },
-    gps: {
-      speed: 65,
-      fuel_pct: 85.2,
-      lat: 37.4979,
-      lng: 127.0276,
-      mode: "SPORT",
-      state: "DRIVING",
-    },
-  },
-  bongo3: {
-    bms: {
-      soc: 42.1,
-      soh: 91.2,
-      pack_volt: 385.9,
-      pack_current: -45.7,
-      odometer: 127845,
-      batt_internal_temp: 28.3,
-      max_cell_volt: 4.08,
-      min_cell_volt: 4.02,
-      chrg_cable_conn: 1,
-      fast_chrg_port_conn: 1,
-      slow_chrg_port_conn: 0,
-      est_chrg_time: 78,
-      cumul_energy_chrgd: 5234.8,
-    },
-    gps: {
-      speed: 0,
-      fuel_pct: 42.1,
-      lat: 35.1796,
-      lng: 129.0756,
-      mode: "NORMAL",
-      state: "CHARGING",
-    },
-  },
+interface VehicleData {
+  vehicle_type: "porter2" | "gv60" | "bongo3"
+  bms: {
+    soc: number
+    soh: number
+    pack_volt: number
+    pack_current: number
+    odometer: number
+    batt_internal_temp: number
+    max_cell_volt: number
+    min_cell_volt: number
+    chrg_cable_conn: number
+    fast_chrg_port_conn: number
+    slow_chrg_port_conn: number
+    est_chrg_time: number
+    cumul_energy_chrgd: number
+  }
+  gps: {
+    speed: number
+    fuel_pct: number
+    lat: number
+    lng: number
+    mode: string
+    state: string
+  }
 }
 
 export function EVDashboard() {
-  const [selectedVehicle, setSelectedVehicle] = useState<keyof typeof mockData>("porter2")
-  const currentData = mockData[selectedVehicle]
+  const [selectedVehicle, setSelectedVehicle] = useState<"porter2" | "gv60" | "bongo3">("porter2")
+  const [currentData, setCurrentData] = useState<VehicleData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchVehicleData = async (vehicleType: string) => {
+    try {
+      setLoading(true)
+      const response = await fetch(`/api/vehicles/${vehicleType}`)
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch vehicle data")
+      }
+
+      const data = await response.json()
+      setCurrentData(data)
+      setError(null)
+    } catch (err) {
+      console.error("Error fetching vehicle data:", err)
+      setError("Failed to load vehicle data")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchVehicleData(selectedVehicle)
+  }, [selectedVehicle])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background p-6 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+          <p className="mt-4 text-muted-foreground">Loading vehicle data...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !currentData) {
+    return (
+      <div className="min-h-screen bg-background p-6 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">{error || "No data available"}</p>
+          <button
+            onClick={() => fetchVehicleData(selectedVehicle)}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   const isCharging = currentData.bms.chrg_cable_conn === 1 || currentData.bms.fast_chrg_port_conn === 1
-  const estimatedRange = Math.round(currentData.bms.soc * 6.64) // Rough calculation based on SOC
+  const estimatedRange = Math.round(currentData.bms.soc * 6.64)
 
   return (
     <div className="min-h-screen bg-background p-6 space-y-6">
@@ -101,7 +104,10 @@ export function EVDashboard() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">AI Car Dashboard</h1>
         <div className="flex items-center gap-4">
-          <Select value={selectedVehicle} onValueChange={(value: keyof typeof mockData) => setSelectedVehicle(value)}>
+          <Select
+            value={selectedVehicle}
+            onValueChange={(value: "porter2" | "gv60" | "bongo3") => setSelectedVehicle(value)}
+          >
             <SelectTrigger className="w-32">
               <Car className="w-4 h-4 mr-2" />
               <SelectValue />
