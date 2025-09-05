@@ -25,3 +25,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 기존 프로젝트 
+integrated_data/
+venv/
+individual/
+requirements.txt
+
+.*
