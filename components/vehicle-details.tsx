@@ -22,7 +22,10 @@ interface VehicleData {
     avg_efficiency: number
     power_w: number
     vehicle_status: string
-    current_status: string
+    speed: number | null
+    lat: number | null
+    lng: number | null
+    fuel_pct: number | null
     seconds_since_update: number
   }
   history: Array<{
@@ -140,8 +143,12 @@ export function VehicleDetails() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-sm font-medium">N/A</div>
-            <div className="text-xs text-muted-foreground mt-1">속도: N/A km/h</div>
+            <div className="text-sm font-medium">
+              {vehicle.lat && vehicle.lng ? `${vehicle.lat.toFixed(4)}, ${vehicle.lng.toFixed(4)}` : 'N/A'}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              속도: {vehicle.speed ? `${vehicle.speed} km/h` : 'N/A'}
+            </div>
           </CardContent>
         </Card>
       </div>

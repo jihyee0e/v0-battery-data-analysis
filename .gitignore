@@ -33,3 +33,5 @@ individual/
 requirements.txt
 
 .*
+
+huggingface/

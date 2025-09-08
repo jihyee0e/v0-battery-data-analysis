@@ -2,13 +2,16 @@ SELECT version();
 SELECT current_database();
 SELECT schemaname, matviewname FROM pg_matviews;
 
-SELECT COUNT(*) FROM bongo3_bms_data;  
+SELECT COUNT(*) FROM bongo3_bms_data;  -- 272093277
 SELECT COUNT(*) FROM gv60_bms_data;  -- 4819309
 SELECT COUNT(*) FROM porter2_bms_data;  -- 16212344
 
 SELECT COUNT(*) FROM bongo3_gps_data;  -- 8359887
 SELECT COUNT(*) FROM gv60_gps_data;  -- 319569
 SELECT COUNT(*) FROM porter2_gps_data;  -- 9655353
+
+SELECT indexname, tablename FROM pg_indexes 
+WHERE tablename IN ('bongo3_bms_data', 'gv60_bms_data', 'porter2_bms_data');
 
 SHOW search_path; 
 SELECT schema_name FROM information_schema.schemata;

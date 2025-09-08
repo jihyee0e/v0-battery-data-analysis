@@ -20,6 +20,10 @@ interface VehicleData {
   avg_efficiency: number; 
   power_w: number;
   vehicle_status: string;
+  speed: number | null;
+  lat: number | null;
+  lng: number | null;
+  fuel_pct: number | null;
 }
 
 export default function VehiclePerformance() {
@@ -91,11 +95,13 @@ export default function VehiclePerformance() {
     }
   };
 
-  const getStatusText = (packCurrent: number, packVolt: number) => {
-    const powerW = packVolt * packCurrent;
-    if (powerW > 1000 || packCurrent >= 3) return "충전중";
-    if (powerW < -3000 || packCurrent <= -8) return "주행중";
-    return "대기중";
+  const getStatusText = (vehicleStatus: string) => {
+    switch (vehicleStatus) {
+      case 'charging': return "충전중";
+      case 'discharging': return "주행중";
+      case 'idle': return "대기중";
+      default: return "알 수 없음";
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -266,9 +272,25 @@ export default function VehiclePerformance() {
                   {getGradeDisplay(vehicle.performance_grade)}
                 </Badge>
                 <Badge className={getStatusColor(vehicle.vehicle_status)}>
-                  {getStatusText(vehicle.pack_current, vehicle.pack_volt)}
+                  {getStatusText(vehicle.vehicle_status)}
                 </Badge>
               </div>
+
+              {/* 위치 정보 */}
+              {vehicle.speed !== null && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-sm text-gray-500">속도</div>
+                    <div className="text-sm font-medium">{vehicle.speed} km/h</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-500">위치</div>
+                    <div className="text-sm font-medium">
+                      {vehicle.lat && vehicle.lng ? `${vehicle.lat.toFixed(2)}, ${vehicle.lng.toFixed(2)}` : 'N/A'}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* 추가 정보 */}
               <div className="text-xs text-gray-500 space-y-1">

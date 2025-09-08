@@ -206,34 +206,34 @@ gps_all AS (
     SELECT device_no, car_type, time, lat, lng, speed, fuel_pct
     FROM public.porter2_gps_data
 ),
+-- 차종별 최신 BMS 데이터 (차량별 최신 1건씩)
 latest_bms AS (
     SELECT 
         device_no,
         car_type,
-        msg_time, 
+        msg_time,
+        TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS') AS msg_ts,
         soc,
         soh,
         pack_volt,
         pack_current,
         mod_avg_temp,
-        (max_cell_volt - min_cell_volt) / pack_volt * 100 AS cell_balance_index,
-        ROW_NUMBER() OVER (PARTITION BY device_no ORDER BY TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS') DESC) AS rn
+        CASE 
+            WHEN pack_volt > 0 AND max_cell_volt IS NOT NULL AND min_cell_volt IS NOT NULL 
+            THEN (max_cell_volt - min_cell_volt) / NULLIF(pack_volt, 0) * 100 
+            ELSE 0 
+        END AS cell_balance_index,
+        ROW_NUMBER() OVER (PARTITION BY car_type, device_no ORDER BY TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS') DESC) AS rn
     FROM bms_all
-    WHERE soc IS NOT NULL AND soh IS NOT NULL
+    WHERE soc IS NOT NULL AND soh IS NOT NULL AND pack_volt > 0
 ),
-latest_gps AS (
-    SELECT 
-        device_no,
-        car_type,
-        time,
-        lat,
-        lng,
-        speed,
-        fuel_pct,
-        ROW_NUMBER() OVER (PARTITION BY device_no ORDER BY time DESC) AS rn
-    FROM gps_all
-    WHERE speed IS NOT NULL
+-- 차종별 최신 BMS 데이터만 필터링
+latest_bms_filtered AS (
+    SELECT *
+    FROM latest_bms
+    WHERE rn = 1
 ),
+-- 시간 정합된 통합 데이터 (최근접 GPS 매칭)
 vehicle_integrated AS (
     SELECT 
         b.device_no AS vehicle_id,
@@ -244,14 +244,23 @@ vehicle_integrated AS (
         b.pack_current,
         b.mod_avg_temp,
         b.cell_balance_index,
+        b.msg_time AS bms_time,
+        g.time AS gps_time,
         g.speed,
         g.lat,
         g.lng,
         g.fuel_pct,
-        b.msg_time,
-        g.time as gps_time
-    FROM latest_bms b
-    LEFT JOIN latest_gps g ON b.device_no = g.device_no
+        ABS(EXTRACT(EPOCH FROM (b.msg_ts - g.time))) AS time_diff_seconds
+    FROM latest_bms_filtered b
+    LEFT JOIN LATERAL (
+        SELECT g.*
+        FROM gps_all g
+        WHERE g.car_type = b.car_type
+          AND g.device_no = b.device_no
+          AND ABS(EXTRACT(EPOCH FROM (b.msg_ts - g.time))) <= 60
+        ORDER BY ABS(EXTRACT(EPOCH FROM (b.msg_ts - g.time)))
+        LIMIT 1
+    ) g ON TRUE
 )
 SELECT 
     vehicle_id,
@@ -262,10 +271,22 @@ SELECT
     pack_current,
     mod_avg_temp,
     cell_balance_index,
-    speed,
-    lat,
-    lng,
-    fuel_pct,
+    CASE 
+        WHEN time_diff_seconds <= 60 THEN speed
+        ELSE NULL 
+    END AS speed,
+    CASE 
+        WHEN time_diff_seconds <= 60 THEN lat
+        ELSE NULL 
+    END AS lat,
+    CASE 
+        WHEN time_diff_seconds <= 60 THEN lng
+        ELSE NULL 
+    END AS lng,
+    CASE 
+        WHEN time_diff_seconds <= 60 THEN fuel_pct
+        ELSE NULL 
+    END AS fuel_pct,
     CASE 
         WHEN latest_soh >= 90 THEN '우수'
         WHEN latest_soh >= 80 THEN '양호'
@@ -273,11 +294,11 @@ SELECT
         ELSE '불량'
     END AS performance_grade,
     CASE 
-        WHEN pack_current > 0 THEN 'charging'
-        WHEN pack_current < -10 THEN 'discharging'
+        WHEN pack_current > 1 THEN 'charging'
+        WHEN pack_current < -1 THEN 'discharging'
         ELSE 'idle'
     END AS vehicle_status,
-    CURRENT_TIMESTAMP AS last_updated
+    GREATEST(bms_time, COALESCE(gps_time, bms_time)) AS last_updated
 FROM vehicle_integrated;
 
 -- 셀 밸런스 분석 
@@ -512,10 +533,16 @@ driving_cycles AS (
         ROUND((b.pack_volt * b.pack_current), 2) AS power_w,
         LAG(b.soc) OVER (PARTITION BY b.device_no ORDER BY TO_TIMESTAMP(b.msg_time, 'YY-MM-DD HH24:MI:SS')) AS prev_soc
     FROM bms_all b
-    LEFT JOIN gps_all g 
-      ON b.device_no = g.device_no 
-     AND ABS(EXTRACT(EPOCH FROM (TO_TIMESTAMP(b.msg_time, 'YY-MM-DD HH24:MI:SS') - g.time))) < 300
-    WHERE b.soc IS NOT NULL AND g.speed IS NOT NULL
+    LEFT JOIN LATERAL (
+        SELECT g.*
+        FROM gps_all g
+        WHERE g.car_type = b.car_type
+          AND g.device_no = b.device_no
+          AND ABS(EXTRACT(EPOCH FROM (TO_TIMESTAMP(b.msg_time, 'YY-MM-DD HH24:MI:SS') - g.time))) <= 60
+        ORDER BY ABS(EXTRACT(EPOCH FROM (TO_TIMESTAMP(b.msg_time, 'YY-MM-DD HH24:MI:SS') - g.time)))
+        LIMIT 1
+    ) g ON TRUE
+    WHERE b.soc IS NOT NULL
 ),
 pattern_performance AS (
     SELECT 
@@ -561,7 +588,7 @@ WITH bms_all AS (
     SELECT device_no, car_type, msg_time, soc, pack_current, pack_volt,
            mod_avg_temp, max_cell_volt, min_cell_volt
     FROM public.gv60_bms_data
-UNION ALL
+    UNION ALL
     SELECT device_no, car_type, msg_time, soc, pack_current, pack_volt,
            mod_avg_temp, max_cell_volt, min_cell_volt
     FROM public.porter2_bms_data
@@ -897,43 +924,3 @@ SELECT
     END as battery_life_prediction
 FROM actual_performance
 ORDER BY efficiency_degradation_rate ASC;
-
-
--- -- =========================
--- -- 3) 인덱스 (원본 테이블에만)
--- -- =========================
-
--- BMS: 기본 시계열 조인/필터
-CREATE INDEX IF NOT EXISTS idx_bongo3_bms_dev_time ON bongo3_bms_data(device_no, msg_time);
-CREATE INDEX IF NOT EXISTS idx_gv60_bms_dev_time   ON gv60_bms_data(device_no, msg_time);
-CREATE INDEX IF NOT EXISTS idx_porter2_bms_dev_time ON porter2_bms_data(device_no, msg_time);
-
--- BMS: 자주 참조되는 컬럼
-CREATE INDEX IF NOT EXISTS idx_bongo3_bms_soh       ON bongo3_bms_data(soh);
-CREATE INDEX IF NOT EXISTS idx_gv60_bms_soh         ON gv60_bms_data(soh);
-CREATE INDEX IF NOT EXISTS idx_porter2_bms_soh      ON porter2_bms_data(soh);
-
-CREATE INDEX IF NOT EXISTS idx_bongo3_bms_pack_v    ON bongo3_bms_data(pack_volt);
-CREATE INDEX IF NOT EXISTS idx_gv60_bms_pack_v      ON gv60_bms_data(pack_volt);
-CREATE INDEX IF NOT EXISTS idx_porter2_bms_pack_v   ON porter2_bms_data(pack_volt);
-
-CREATE INDEX IF NOT EXISTS idx_bongo3_bms_pack_i    ON bongo3_bms_data(pack_current);
-CREATE INDEX IF NOT EXISTS idx_gv60_bms_pack_i      ON gv60_bms_data(pack_current);
-CREATE INDEX IF NOT EXISTS idx_porter2_bms_pack_i   ON porter2_bms_data(pack_current);
-
-CREATE INDEX IF NOT EXISTS idx_bongo3_bms_temp_avg  ON bongo3_bms_data(mod_avg_temp);
-CREATE INDEX IF NOT EXISTS idx_gv60_bms_temp_avg    ON gv60_bms_data(mod_avg_temp);
-CREATE INDEX IF NOT EXISTS idx_porter2_bms_temp_avg ON porter2_bms_data(mod_avg_temp);
-
--- GPS: 시간 매칭용
-CREATE INDEX IF NOT EXISTS idx_bongo3_gps_dev_time ON bongo3_gps_data(device_no, time);
-CREATE INDEX IF NOT EXISTS idx_gv60_gps_dev_time   ON gv60_gps_data(device_no, time);
-CREATE INDEX IF NOT EXISTS idx_porter2_gps_dev_time ON porter2_gps_data(device_no, time);
-
-CREATE INDEX IF NOT EXISTS idx_bms_device_time ON bongo3_bms_data(device_no, msg_time);
-CREATE INDEX IF NOT EXISTS idx_bms_car_type ON bongo3_bms_data(car_type);
-CREATE INDEX IF NOT EXISTS idx_bms_soh ON bongo3_bms_data(soh);
-CREATE INDEX IF NOT EXISTS idx_bms_temp ON bongo3_bms_data(mod_avg_temp);
-CREATE INDEX IF NOT EXISTS idx_bms_balance ON bongo3_bms_data(max_cell_volt, min_cell_volt, pack_volt);
-CREATE INDEX IF NOT EXISTS idx_gps_device_time ON bongo3_gps_data(device_no, time);
-CREATE INDEX IF NOT EXISTS idx_gps_speed ON bongo3_gps_data(speed);

@@ -19,12 +19,10 @@ export async function GET(request: Request, { params }: { params: { type: string
         cell_balance_index as avg_efficiency,
         (pack_volt * pack_current) as power_w,
         vehicle_status,
-        -- 실시간 상태
-        CASE 
-          WHEN pack_current > 0 THEN 'charging'
-          WHEN pack_current < -10 THEN 'discharging'
-          ELSE 'idle'
-        END as current_status,
+        speed,
+        lat,
+        lng,
+        fuel_pct,
         -- 마지막 업데이트로부터 경과 시간
         EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_updated)) as seconds_since_update
       FROM vehicle_performance_mv
@@ -72,7 +70,7 @@ export async function GET(request: Request, { params }: { params: { type: string
       summary: {
         is_active: data.seconds_since_update < 3600, // Active if updated within 1 hour
         performance_status: data.performance_grade,
-        charging_status: data.current_status,
+        charging_status: data.vehicle_status,
       },
     })
   } catch (error) {

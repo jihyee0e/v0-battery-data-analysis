@@ -26,7 +26,11 @@ export async function GET(request: Request) {
         pack_current,
         mod_avg_temp,
         (pack_volt * pack_current) as power_w,
-        vehicle_status
+        vehicle_status,
+        speed,
+        lat,
+        lng,
+        fuel_pct
       FROM vehicle_performance_mv
       WHERE 1=1
     `
