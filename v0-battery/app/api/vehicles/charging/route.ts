@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/v0-battery/lib/database';
+import { query } from '@/lib/database';
 
 export async function GET(request: NextRequest) {
   try {

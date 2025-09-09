@@ -1,5 +1,5 @@
 "use client"
-import { Button } from "@/v0-battery/components/ui/button"
+import { Button } from "@/components/ui/button"
 import { LayoutDashboard, Car, TrendingUp, Trophy, BarChart3 } from "lucide-react"
 
 interface NavigationProps {

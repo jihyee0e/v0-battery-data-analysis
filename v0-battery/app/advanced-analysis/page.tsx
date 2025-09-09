@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import BatteryAgingTrends from '@/v0-battery/components/battery-aging-trends';
-import ChargingSessionAnalysis from '@/v0-battery/components/charging-session-analysis';
+import BatteryAgingTrends from '@/components/battery-aging-trends';
+import ChargingSessionAnalysis from '@/components/charging-session-analysis';
 
 export default function AdvancedAnalysisPage() {
   const [activeTab, setActiveTab] = useState<'aging' | 'charging'>('aging');

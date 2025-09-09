@@ -1,6 +1,6 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/v0-battery/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Database, ArrowRight, BarChart3, Battery } from "lucide-react"
 
 export function DataFlowDiagram() {

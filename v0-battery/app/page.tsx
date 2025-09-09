@@ -1,12 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { Navigation } from "@/v0-battery/components/navigation"
-import EVDashboard from "@/v0-battery/components/ev-dashboard"
-import VehiclePerformance from "@/v0-battery/components/vehicle-performance"
-import { VehicleDetails } from "@/v0-battery/components/vehicle-details"
-import RankingPage from "@/v0-battery/components/ranking-page"
-import { AnalysisPage } from "@/v0-battery/components/analysis-page"
+import { Navigation } from "@/components/navigation"
+import EVDashboard from "@/components/ev-dashboard"
+import VehiclePerformance from "@/components/vehicle-performance"
+import { VehicleDetails } from "@/components/vehicle-details"
+import RankingPage from "@/components/ranking-page"
+import { AnalysisPage } from "@/components/analysis-page"
 
 export default function Home() {
   const [currentPage, setCurrentPage] = useState("dashboard")

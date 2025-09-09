@@ -1,7 +1,7 @@
 "use client"
 
 import { Zap, Clock } from "lucide-react"
-import { Progress } from "@/v0-battery/components/ui/progress"
+import { Progress } from "@/components/ui/progress"
 
 interface ChargingStatusProps {
   isCharging: boolean

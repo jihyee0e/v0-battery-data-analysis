@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { pool } from "@/v0-battery/lib/database"
+import { pool } from "@/lib/database"
 
 export async function GET(request: Request, { params }: { params: { type: string } }) {
   try {

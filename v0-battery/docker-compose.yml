@@ -13,7 +13,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts:/docker-entrypoint-initdb.d
-      - ./integrated_data:/integrated_data
+      - ../integrated_data:/integrated_data
     restart: unless-stopped
 
 volumes:
