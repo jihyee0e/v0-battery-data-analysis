@@ -36,3 +36,39 @@ SELECT COUNT(*) FROM vehicle_history_analysis;
 -- SELECT pg_terminate_backend(pid) FROM pg_stat_activity 
 -- WHERE query LIKE '%DROP%vehicle_history_analysis%';
 SELECT viewname FROM pg_views WHERE viewname LIKE '%vehicle_history%';
+
+-- 인덱스 제거
+DROP INDEX IF EXISTS idx_bongo3_bms_dev_time;
+DROP INDEX IF EXISTS idx_gv60_bms_dev_time;
+DROP INDEX IF EXISTS idx_porter2_bms_dev_time;
+
+DROP INDEX IF EXISTS idx_bongo3_bms_soh;
+DROP INDEX IF EXISTS idx_gv60_bms_soh;
+DROP INDEX IF EXISTS idx_porter2_bms_soh;
+
+DROP INDEX IF EXISTS idx_bongo3_bms_pack_v;
+DROP INDEX IF EXISTS idx_gv60_bms_pack_v;
+DROP INDEX IF EXISTS idx_porter2_bms_pack_v;
+
+DROP INDEX IF EXISTS idx_bongo3_bms_pack_i;
+DROP INDEX IF EXISTS idx_gv60_bms_pack_i;
+DROP INDEX IF EXISTS idx_porter2_bms_pack_i;
+
+DROP INDEX IF EXISTS idx_bongo3_bms_temp_avg;
+DROP INDEX IF EXISTS idx_gv60_bms_temp_avg;
+DROP INDEX IF EXISTS idx_porter2_bms_temp_avg;
+
+DROP INDEX IF EXISTS idx_bongo3_gps_dev_time;
+DROP INDEX IF EXISTS idx_gv60_gps_dev_time;
+DROP INDEX IF EXISTS idx_porter2_gps_dev_time;
+
+DROP INDEX IF EXISTS idx_bms_device_time;
+DROP INDEX IF EXISTS idx_gps_device_time;
+
+DROP INDEX IF EXISTS idx_bms_car_type;
+DROP INDEX IF EXISTS idx_gps_speed;
+
+DROP INDEX IF EXISTS idx_bms_soh;
+DROP INDEX IF EXISTS idx_bms_temp;
+
+DROP INDEX IF EXISTS idx_bms_balance;

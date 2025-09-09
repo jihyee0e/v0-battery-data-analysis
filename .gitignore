@@ -35,3 +35,6 @@ requirements.txt
 .*
 
 huggingface/
+
+# 임시
+prepare.sql

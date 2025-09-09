@@ -1,38 +1,30 @@
--- =========================
--- 인덱스 (원본 테이블에만)
--- =========================
+-- GPS: 근접 매칭 가속 (3개 테이블)
+CREATE INDEX IF NOT EXISTS idx_gps_bongo3_ct_dev_time
+  ON bongo3_gps_data (car_type, device_no, "time");
+CREATE INDEX IF NOT EXISTS idx_gps_gv60_ct_dev_time
+  ON gv60_gps_data   (car_type, device_no, "time");
+CREATE INDEX IF NOT EXISTS idx_gps_porter2_ct_dev_time
+  ON porter2_gps_data(car_type, device_no, "time");
 
--- BMS: 기본 시계열 조인/필터
-CREATE INDEX IF NOT EXISTS idx_bongo3_bms_dev_time ON bongo3_bms_data(device_no, msg_time);
-CREATE INDEX IF NOT EXISTS idx_gv60_bms_dev_time   ON gv60_bms_data(device_no, msg_time);
-CREATE INDEX IF NOT EXISTS idx_porter2_bms_dev_time ON porter2_bms_data(device_no, msg_time);
+-- BMS: 차량별 최신/기간 필터 가속 (3개 테이블)
+-- 1) 컬럼 추가(빈 칼럼)
+ALTER TABLE bongo3_bms_data  ADD COLUMN msg_ts timestamptz;
+ALTER TABLE gv60_bms_data    ADD COLUMN msg_ts timestamptz;
+ALTER TABLE porter2_bms_data ADD COLUMN msg_ts timestamptz;
 
--- BMS: 자주 참조되는 컬럼
-CREATE INDEX IF NOT EXISTS idx_bongo3_bms_soh       ON bongo3_bms_data(soh);
-CREATE INDEX IF NOT EXISTS idx_gv60_bms_soh         ON gv60_bms_data(soh);
-CREATE INDEX IF NOT EXISTS idx_porter2_bms_soh      ON porter2_bms_data(soh);
+-- 2) 1회 백필 (YY 포맷이면 그대로)  -- 여기부터 다시 돌리기
+UPDATE bongo3_bms_data
+  SET msg_ts = to_timestamp(msg_time, 'YY-MM-DD HH24:MI:SS') WHERE msg_ts IS NULL;
+UPDATE gv60_bms_data
+  SET msg_ts = to_timestamp(msg_time, 'YY-MM-DD HH24:MI:SS') WHERE msg_ts IS NULL;
+UPDATE porter2_bms_data
+  SET msg_ts = to_timestamp(msg_time, 'YY-MM-DD HH24:MI:SS') WHERE msg_ts IS NULL;
 
-CREATE INDEX IF NOT EXISTS idx_bongo3_bms_pack_v    ON bongo3_bms_data(pack_volt);
-CREATE INDEX IF NOT EXISTS idx_gv60_bms_pack_v      ON gv60_bms_data(pack_volt);
-CREATE INDEX IF NOT EXISTS idx_porter2_bms_pack_v   ON porter2_bms_data(pack_volt);
+-- 3) 인덱스
+CREATE INDEX IF NOT EXISTS idx_bms_bongo3_ct_dev_ts
+  ON bongo3_bms_data (car_type, device_no, msg_ts DESC);
+CREATE INDEX IF NOT EXISTS idx_bms_gv60_ct_dev_ts
+  ON gv60_bms_data (car_type, device_no, msg_ts DESC);
+CREATE INDEX IF NOT EXISTS idx_bms_porter2_ct_dev_ts
+  ON porter2_bms_data (car_type, device_no, msg_ts DESC);
 
-CREATE INDEX IF NOT EXISTS idx_bongo3_bms_pack_i    ON bongo3_bms_data(pack_current);
-CREATE INDEX IF NOT EXISTS idx_gv60_bms_pack_i      ON gv60_bms_data(pack_current);
-CREATE INDEX IF NOT EXISTS idx_porter2_bms_pack_i   ON porter2_bms_data(pack_current);
-
-CREATE INDEX IF NOT EXISTS idx_bongo3_bms_temp_avg  ON bongo3_bms_data(mod_avg_temp);
-CREATE INDEX IF NOT EXISTS idx_gv60_bms_temp_avg    ON gv60_bms_data(mod_avg_temp);
-CREATE INDEX IF NOT EXISTS idx_porter2_bms_temp_avg ON porter2_bms_data(mod_avg_temp);
-
--- GPS: 시간 매칭용
-CREATE INDEX IF NOT EXISTS idx_bongo3_gps_dev_time ON bongo3_gps_data(device_no, time);
-CREATE INDEX IF NOT EXISTS idx_gv60_gps_dev_time   ON gv60_gps_data(device_no, time);
-CREATE INDEX IF NOT EXISTS idx_porter2_gps_dev_time ON porter2_gps_data(device_no, time);
-
-CREATE INDEX IF NOT EXISTS idx_bms_device_time ON bongo3_bms_data(device_no, msg_time);
-CREATE INDEX IF NOT EXISTS idx_bms_car_type ON bongo3_bms_data(car_type);
-CREATE INDEX IF NOT EXISTS idx_bms_soh ON bongo3_bms_data(soh);
-CREATE INDEX IF NOT EXISTS idx_bms_temp ON bongo3_bms_data(mod_avg_temp);
-CREATE INDEX IF NOT EXISTS idx_bms_balance ON bongo3_bms_data(max_cell_volt, min_cell_volt, pack_volt);
-CREATE INDEX IF NOT EXISTS idx_gps_device_time ON bongo3_gps_data(device_no, time);
-CREATE INDEX IF NOT EXISTS idx_gps_speed ON bongo3_gps_data(speed);
