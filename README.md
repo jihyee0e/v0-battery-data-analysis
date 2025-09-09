@@ -101,28 +101,30 @@ python3 individual/backend1/app.py
 ## 📁 프로젝트 구조
 
 ```
-aicar-preprocessing/
-├── app/                    # Next.js 앱 라우터
-│   ├── api/               # API 엔드포인트
-│   │   ├── analytics/     # 분석 API
-│   │   ├── dashboard/     # 대시보드 API
-│   │   └── vehicles/      # 차량 데이터 API
-│   └── advanced-analysis/  # 고급 분석 페이지
-├── components/            # React 컴포넌트
-│   ├── ui/               # 기본 UI 컴포넌트
-│   ├── ev-dashboard.tsx  # 메인 대시보드
-│   ├── battery-gauge.tsx # 배터리 게이지
+v0-battery/
+├── app/                      # Next.js 앱 라우터
+│   ├── api/                  # API 엔드포인트
+│   │   ├── analytics/        # 분석 API
+│   │   ├── dashboard/        # 대시보드 API
+│   │   └── vehicles/         # 차량 데이터 API
+│   └── advanced-analysis/    # 고급 분석 페이지
+├── components/               # React 컴포넌트
+│   ├── ui/                   # 기본 UI 컴포넌트
+│   ├── ev-dashboard.tsx      # 메인 대시보드
+│   ├── battery-gauge.tsx     # 배터리 게이지
 │   └── ...
-├── individual/           # 개별 서비스
-│   ├── backend1/        # Python 백엔드
-│   ├── frontend1/       # React 프론트엔드
-│   └── pre-03/         # 데이터 전처리
-├── integrated_data/     # 통합된 데이터
-│   ├── BMS/            # BMS 데이터
-│   └── GPS/            # GPS 데이터
-├── scripts/            # SQL 스크립트
-├── lib/               # 유틸리티 함수
-└── llm_models/        # LLM 모델 저장소
+├── scripts/                  # SQL 스크립트
+│   ├── 01_setup_database.sql
+│   ├── 02_analysis_database.sql
+│   ├── 03_advanced_analysis.sql
+│   └── ...
+├── lib/                      # 유틸리티 함수
+├── styles/                   # CSS 스타일
+├── public/                   # 정적 파일
+├── docker-compose.yml        # Docker 설정
+├── package.json              # Node.js 의존성
+├── requirements.txt          # Python 의존성
+└── README.md
 ```
 
 ## 🔌 API 엔드포인트
