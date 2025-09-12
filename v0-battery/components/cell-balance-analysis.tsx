@@ -1,305 +1,266 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts"
-import { Battery, TrendingUp, AlertTriangle, Activity } from "lucide-react"
+import React, { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+import { Battery, AlertTriangle, TrendingUp, Activity } from 'lucide-react'
 
 interface CellBalanceData {
-  balance_trends: Array<{
-    date: string
-    avg_balance_index: number
-    balance_variability: number
-    data_points: number
-    high_imbalance_count: number
-    moderate_imbalance_count: number
-  }>
-  balance_triggers: Array<{
-    imbalance_trigger: string
-    occurrence_count: number
-    avg_imbalance_level: number
-    avg_temperature: number
-    avg_current: number
-  }>
-  vehicle_comparison: Array<{
-    car_type: string
-    avg_balance_index: number
-    balance_variability: number
-    total_records: number
-    high_imbalance_records: number
-    imbalance_percentage: number
-  }>
+  device_no: string
+  car_type: string
+  msg_time: string
+  soc: number
+  pack_current: number
+  mod_avg_temp: number
+  cell_balance_index: number
+  speed: number | null
+  lat: number | null
+  lng: number | null
+  fuel_pct: number | null
+  imbalance_trigger: string
+}
+
+interface BalanceStats {
+  excellent_balance_count: number
+  good_balance_count: number
+  moderate_balance_count: number
+  poor_balance_count: number
+  total_count: number
 }
 
 export function CellBalanceAnalysis() {
-  const [selectedVehicleType, setSelectedVehicleType] = useState<string>("all")
-  const [selectedTimeRange, setSelectedTimeRange] = useState<string>("30d")
-  const [balanceData, setBalanceData] = useState<CellBalanceData | null>(null)
+  const [balanceData, setBalanceData] = useState<CellBalanceData[]>([])
+  const [balanceStats, setBalanceStats] = useState<BalanceStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [selectedCarType, setSelectedCarType] = useState('all')
+  const [selectedTrigger, setSelectedTrigger] = useState('all')
 
-  const fetchCellBalanceData = async () => {
+  const fetchBalanceData = async () => {
     try {
       setLoading(true)
-      setError(null)
-      
       const params = new URLSearchParams({
-        time_range: selectedTimeRange
+        car_type: selectedCarType,
+        trigger: selectedTrigger,
+        limit: '100'
       })
-      
-      if (selectedVehicleType !== "all") {
-        params.append("car_type", selectedVehicleType)
-      }
 
       const response = await fetch(`/api/analytics/cell-balance?${params}`)
-      
-      if (!response.ok) {
-        throw new Error("Failed to fetch cell balance data")
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data) {
+          setBalanceData(data.data.balance_data || [])
+          setBalanceStats(data.data.statistics || null)
+        }
       }
-
-      const data = await response.json()
-      setBalanceData(data.data)
-    } catch (err) {
-      console.error("Error fetching cell balance data:", err)
-      setError("셀 밸런스 데이터를 불러오는데 실패했습니다")
+    } catch (error) {
+      console.error('셀 밸런스 데이터 로드 실패:', error)
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchCellBalanceData()
-  }, [selectedVehicleType, selectedTimeRange])
+    fetchBalanceData()
+  }, [selectedCarType, selectedTrigger])
+
+  const getBalanceStatus = (index: number) => {
+    if (index <= 0.5) return { status: '우수', color: 'bg-green-100 text-green-800', icon: '🟢' }
+    if (index <= 1.0) return { status: '양호', color: 'bg-blue-100 text-blue-800', icon: '🔵' }
+    if (index <= 2.0) return { status: '보통', color: 'bg-yellow-100 text-yellow-800', icon: '🟡' }
+    return { status: '불량', color: 'bg-red-100 text-red-800', icon: '🔴' }
+  }
+
+  const getTriggerDisplay = (trigger: string) => {
+    switch (trigger) {
+      case 'high_current_imbalance': return '고전류 불균형'
+      case 'high_temp_imbalance': return '고온 불균형'
+      case 'low_soc_imbalance': return '저SOC 불균형'
+      case 'normal_condition': return '정상 상태'
+      default: return trigger
+    }
+  }
+
+  const getTriggerColor = (trigger: string) => {
+    switch (trigger) {
+      case 'high_current_imbalance': return 'bg-red-100 text-red-800'
+      case 'high_temp_imbalance': return 'bg-orange-100 text-orange-800'
+      case 'low_soc_imbalance': return 'bg-yellow-100 text-yellow-800'
+      case 'normal_condition': return 'bg-green-100 text-green-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
 
   if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center space-x-2">
-          <Battery className="h-6 w-6" />
-          <h2 className="text-2xl font-bold">셀 밸런스 분석</h2>
-        </div>
-        <div className="text-center py-8">데이터를 불러오는 중...</div>
-      </div>
-    )
+    return <div className="flex items-center justify-center h-64">로딩 중...</div>
   }
-
-  if (error) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center space-x-2">
-          <Battery className="h-6 w-6" />
-          <h2 className="text-2xl font-bold">셀 밸런스 분석</h2>
-        </div>
-        <div className="text-center py-8 text-red-500">{error}</div>
-      </div>
-    )
-  }
-
-  if (!balanceData) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center space-x-2">
-          <Battery className="h-6 w-6" />
-          <h2 className="text-2xl font-bold">셀 밸런스 분석</h2>
-        </div>
-        <div className="text-center py-8">데이터가 없습니다</div>
-      </div>
-    )
-  }
-
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8']
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <Battery className="h-6 w-6" />
-          <h2 className="text-2xl font-bold">셀 밸런스 분석</h2>
-        </div>
-        
-        <div className="flex space-x-4">
-          <Select value={selectedVehicleType} onValueChange={setSelectedVehicleType}>
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder="차종 선택" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체</SelectItem>
-              <SelectItem value="porter2">Porter2</SelectItem>
-              <SelectItem value="gv60">GV60</SelectItem>
-              <SelectItem value="bongo3">Bongo3</SelectItem>
-            </SelectContent>
-          </Select>
-          
-          <Select value={selectedTimeRange} onValueChange={setSelectedTimeRange}>
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder="기간 선택" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7d">7일</SelectItem>
-              <SelectItem value="30d">30일</SelectItem>
-              <SelectItem value="90d">90일</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* 셀 밸런스 트렌드 */}
+      {/* 필터링 */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <TrendingUp className="h-5 w-5" />
-            <span>셀 밸런스 변화 추이</span>
-          </CardTitle>
+          <CardTitle>셀 밸런스 분석 필터</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={balanceData.balance_trends}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
-                dataKey="date" 
-                tickFormatter={(value) => new Date(value).toLocaleDateString()}
-              />
-              <YAxis />
-              <Tooltip 
-                labelFormatter={(value) => new Date(value).toLocaleDateString()}
-                formatter={(value: number, name: string) => [
-                  value.toFixed(3),
-                  name === 'avg_balance_index' ? '평균 밸런스 지수' : '변동성'
-                ]}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="avg_balance_index" 
-                stroke="#0088FE" 
-                strokeWidth={2}
-                name="평균 밸런스 지수"
-              />
-              <Line 
-                type="monotone" 
-                dataKey="balance_variability" 
-                stroke="#FF8042" 
-                strokeWidth={2}
-                name="변동성"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Select value={selectedCarType} onValueChange={(value) => setSelectedCarType(value === 'ALL' ? 'all' : value)}>
+              <SelectTrigger>
+                <SelectValue placeholder="차종 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체</SelectItem>
+                <SelectItem value="BONGO3">BONGO3</SelectItem>
+                <SelectItem value="GV60">GV60</SelectItem>
+                <SelectItem value="PORTER2">PORTER2</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedTrigger} onValueChange={(value) => setSelectedTrigger(value === 'ALL' ? 'all' : value)}>
+              <SelectTrigger>
+                <SelectValue placeholder="트리거 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체</SelectItem>
+                <SelectItem value="high_current_imbalance">고전류 불균형</SelectItem>
+                <SelectItem value="high_temp_imbalance">고온 불균형</SelectItem>
+                <SelectItem value="low_soc_imbalance">저SOC 불균형</SelectItem>
+                <SelectItem value="normal_condition">정상 상태</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 
-      {/* 밸런스 악화 트리거 분석 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <AlertTriangle className="h-5 w-5" />
-              <span>밸런스 악화 트리거</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={balanceData.balance_triggers}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="imbalance_trigger" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="occurrence_count" fill="#8884D8" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+      {/* 통계 요약 */}
+      {balanceStats && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">우수</CardTitle>
+              <Battery className="h-4 w-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{balanceStats.excellent_balance_count}</div>
+              <Progress 
+                value={(balanceStats.excellent_balance_count / balanceStats.total_count) * 100} 
+                className="mt-2"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                밸런스 ≤ 0.5%
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Activity className="h-5 w-5" />
-              <span>차종별 밸런스 특성</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={balanceData.vehicle_comparison}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="car_type" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="avg_balance_index" fill="#00C49F" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">양호</CardTitle>
+              <Activity className="h-4 w-4 text-blue-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">{balanceStats.good_balance_count}</div>
+              <Progress 
+                value={(balanceStats.good_balance_count / balanceStats.total_count) * 100} 
+                className="mt-2"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                밸런스 0.5-1.0%
+              </p>
+            </CardContent>
+          </Card>
 
-      {/* 상세 통계 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">평균 밸런스 지수</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {balanceData.balance_trends.length > 0 
-                ? balanceData.balance_trends[0].avg_balance_index.toFixed(3)
-                : "N/A"
-              }
-            </div>
-            <p className="text-xs text-muted-foreground">
-              현재 평균 셀 밸런스 상태
-            </p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">보통</CardTitle>
+              <TrendingUp className="h-4 w-4 text-yellow-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-yellow-600">{balanceStats.moderate_balance_count}</div>
+              <Progress 
+                value={(balanceStats.moderate_balance_count / balanceStats.total_count) * 100} 
+                className="mt-2"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                밸런스 1.0-2.0%
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">높은 불균형 차량</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {balanceData.balance_trends.length > 0 
-                ? balanceData.balance_trends[0].high_imbalance_count
-                : "N/A"
-              }
-            </div>
-            <p className="text-xs text-muted-foreground">
-              밸런스 지수 2.0 이상
-            </p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">불량</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">{balanceStats.poor_balance_count}</div>
+              <Progress 
+                value={(balanceStats.poor_balance_count / balanceStats.total_count) * 100} 
+                className="mt-2"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                밸런스 > 2.0%
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">가장 안정적인 차종</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {balanceData.vehicle_comparison.length > 0 
-                ? balanceData.vehicle_comparison[0].car_type
-                : "N/A"
-              }
-            </div>
-            <p className="text-xs text-muted-foreground">
-              가장 낮은 평균 밸런스 지수
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* 상세 데이터 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>셀 밸런스 상세 데이터</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-3">차량 ID</th>
+                  <th className="text-left p-3">차종</th>
+                  <th className="text-left p-3">SOC</th>
+                  <th className="text-left p-3">밸런스 지수</th>
+                  <th className="text-left p-3">상태</th>
+                  <th className="text-left p-3">온도</th>
+                  <th className="text-left p-3">트리거</th>
+                  <th className="text-left p-3">시간</th>
+                </tr>
+              </thead>
+              <tbody>
+                {balanceData.slice(0, 20).map((item, index) => {
+                  const balanceStatus = getBalanceStatus(item.cell_balance_index)
+                  return (
+                    <tr key={`${item.device_no}-${index}`} className="border-b hover:bg-gray-50">
+                      <td className="p-3 font-medium">{item.device_no}</td>
+                      <td className="p-3">
+                        <Badge variant="outline">{item.car_type}</Badge>
+                      </td>
+                      <td className="p-3">{item.soc.toFixed(1)}%</td>
+                      <td className="p-3">
+                        <div className="text-lg font-semibold">{item.cell_balance_index.toFixed(3)}%</div>
+                      </td>
+                      <td className="p-3">
+                        <Badge className={balanceStatus.color}>
+                          {balanceStatus.icon} {balanceStatus.status}
+                        </Badge>
+                      </td>
+                      <td className="p-3">{item.mod_avg_temp.toFixed(1)}°C</td>
+                      <td className="p-3">
+                        <Badge className={getTriggerColor(item.imbalance_trigger)}>
+                          {getTriggerDisplay(item.imbalance_trigger)}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-sm text-gray-500">
+                        {new Date(item.msg_time).toLocaleString('ko-KR')}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
-
-
-

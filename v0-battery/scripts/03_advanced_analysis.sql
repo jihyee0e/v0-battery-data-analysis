@@ -3,15 +3,15 @@
 -- 1. 셀 밸런스 트렌드 분석
 CREATE MATERIALIZED VIEW cell_balance_trends_mv AS
 WITH bms_all AS (
-    SELECT device_no, car_type, msg_time, soc, soh, pack_volt, pack_current,
+    SELECT device_no, car_type, msg_ts, soc, soh, pack_volt, pack_current,
            mod_avg_temp, max_cell_volt, min_cell_volt
     FROM public.bongo3_bms_data
     UNION ALL
-    SELECT device_no, car_type, msg_time, soc, soh, pack_volt, pack_current,
+    SELECT device_no, car_type, msg_ts, soc, soh, pack_volt, pack_current,
            mod_avg_temp, max_cell_volt, min_cell_volt
     FROM public.gv60_bms_data
     UNION ALL
-    SELECT device_no, car_type, msg_time, soc, soh, pack_volt, pack_current,
+    SELECT device_no, car_type, msg_ts, soc, soh, pack_volt, pack_current,
            mod_avg_temp, max_cell_volt, min_cell_volt
     FROM public.porter2_bms_data
 ),
@@ -29,7 +29,7 @@ balance_data AS (
     SELECT 
         b.device_no,
         b.car_type,
-        b.msg_time,
+        b.msg_ts,
         b.soc,
         b.soh,
         b.pack_volt,
@@ -40,10 +40,10 @@ balance_data AS (
         g.lat,
         g.lng,
         g.fuel_pct,
-        DATE_TRUNC('day', TO_TIMESTAMP(b.msg_time, 'YY-MM-DD HH24:MI:SS')) as date
+        DATE_TRUNC('day', b.msg_ts) as date
     FROM bms_all b
     LEFT JOIN gps_all g ON b.device_no = g.device_no 
-        AND ABS(EXTRACT(EPOCH FROM (TO_TIMESTAMP(b.msg_time, 'YY-MM-DD HH24:MI:SS') - g.time))) < 300
+        AND ABS(EXTRACT(EPOCH FROM (b.msg_ts - g.time))) < 300
     WHERE b.max_cell_volt IS NOT NULL 
       AND b.min_cell_volt IS NOT NULL 
       AND b.pack_volt > 0
@@ -73,15 +73,15 @@ ORDER BY date DESC, car_type;
 -- 2. 주행 패턴별 성능 분석
 CREATE MATERIALIZED VIEW driving_pattern_performance_mv AS
 WITH bms_all AS (
-    SELECT device_no, car_type, msg_time, soc, soh, pack_volt, pack_current,
+    SELECT device_no, car_type, msg_ts, soc, soh, pack_volt, pack_current,
            mod_avg_temp
     FROM public.bongo3_bms_data
     UNION ALL
-    SELECT device_no, car_type, msg_time, soc, soh, pack_volt, pack_current,
+    SELECT device_no, car_type, msg_ts, soc, soh, pack_volt, pack_current,
            mod_avg_temp
     FROM public.gv60_bms_data
     UNION ALL
-    SELECT device_no, car_type, msg_time, soc, soh, pack_volt, pack_current,
+    SELECT device_no, car_type, msg_ts, soc, soh, pack_volt, pack_current,
            mod_avg_temp
     FROM public.porter2_bms_data
 ),
@@ -99,7 +99,7 @@ driving_patterns AS (
     SELECT 
         b.device_no,
         b.car_type,
-        b.msg_time,
+        b.msg_ts,
         b.soc,
         b.soh,
         b.pack_volt,
@@ -121,7 +121,7 @@ driving_patterns AS (
         ABS(b.pack_volt * b.pack_current) as power_w
     FROM bms_all b
     LEFT JOIN gps_all g ON b.device_no = g.device_no 
-        AND ABS(EXTRACT(EPOCH FROM (TO_TIMESTAMP(b.msg_time, 'YY-MM-DD HH24:MI:SS') - g.time))) < 300
+        AND ABS(EXTRACT(EPOCH FROM (b.msg_ts - g.time))) < 300
     WHERE b.pack_current < 0  -- 방전 중인 경우만
 )
 SELECT 
@@ -149,13 +149,13 @@ ORDER BY driving_mode, car_type;
 -- 3. 충전 효율성 분석 
 CREATE MATERIALIZED VIEW charging_efficiency_mv AS
 WITH bms_all AS (
-    SELECT device_no, car_type, msg_time, soc, pack_volt, pack_current, mod_avg_temp
+    SELECT device_no, car_type, msg_ts, soc, pack_volt, pack_current, mod_avg_temp
     FROM public.bongo3_bms_data
     UNION ALL
-    SELECT device_no, car_type, msg_time, soc, pack_volt, pack_current, mod_avg_temp
+    SELECT device_no, car_type, msg_ts, soc, pack_volt, pack_current, mod_avg_temp
     FROM public.gv60_bms_data
     UNION ALL
-    SELECT device_no, car_type, msg_time, soc, pack_volt, pack_current, mod_avg_temp
+    SELECT device_no, car_type, msg_ts, soc, pack_volt, pack_current, mod_avg_temp
     FROM public.porter2_bms_data
 ),
 gps_all AS (
@@ -172,7 +172,7 @@ charging_sessions AS (
     SELECT 
         b.device_no,
         b.car_type,
-        b.msg_time,
+        b.msg_ts,
         b.soc,
         b.pack_volt,
         b.pack_current,
@@ -183,9 +183,9 @@ charging_sessions AS (
         g.fuel_pct,
         -- 충전 세션 시작/종료 감지
         CASE 
-            WHEN b.pack_current >= 1 AND LAG(b.pack_current) OVER (PARTITION BY b.device_no ORDER BY TO_TIMESTAMP(b.msg_time, 'YY-MM-DD HH24:MI:SS')) < 1 
+            WHEN b.pack_current >= 1 AND LAG(b.pack_current) OVER (PARTITION BY b.device_no ORDER BY b.msg_ts) < 1 
             THEN 'START'
-            WHEN b.pack_current < 1 AND LAG(b.pack_current) OVER (PARTITION BY b.device_no ORDER BY TO_TIMESTAMP(b.msg_time, 'YY-MM-DD HH24:MI:SS')) >= 1 
+            WHEN b.pack_current < 1 AND LAG(b.pack_current) OVER (PARTITION BY b.device_no ORDER BY b.msg_ts) >= 1 
             THEN 'END'
             ELSE 'CHARGING'
         END as session_status,
@@ -193,7 +193,7 @@ charging_sessions AS (
         b.pack_volt * b.pack_current as power_w
     FROM bms_all b
     LEFT JOIN gps_all g ON b.device_no = g.device_no 
-        AND ABS(EXTRACT(EPOCH FROM (TO_TIMESTAMP(b.msg_time, 'YY-MM-DD HH24:MI:SS') - g.time))) < 300
+        AND ABS(EXTRACT(EPOCH FROM (b.msg_ts - g.time))) < 300
     WHERE b.pack_current > 0  -- 충전 중인 경우만
 ),
 session_summary AS (
@@ -201,7 +201,7 @@ session_summary AS (
         device_no,
         car_type,
         session_status,
-        msg_time,
+        msg_ts,
         soc,
         power_w,
         mod_avg_temp,
@@ -210,15 +210,15 @@ session_summary AS (
         lng,
         fuel_pct,
         -- 세션별 그룹화
-        SUM(CASE WHEN session_status = 'START' THEN 1 ELSE 0 END) OVER (PARTITION BY device_no ORDER BY TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS')) as session_id
+        SUM(CASE WHEN session_status = 'START' THEN 1 ELSE 0 END) OVER (PARTITION BY device_no ORDER BY msg_ts) as session_id
     FROM charging_sessions
 )
 SELECT 
     device_no,
     car_type,
     session_id,
-    MIN(CASE WHEN session_status = 'START' THEN TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS') END) as charge_start_time,
-    MAX(CASE WHEN session_status = 'END' THEN TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS') END) as charge_end_time,
+    MIN(CASE WHEN session_status = 'START' THEN msg_ts END) as charge_start_time,
+    MAX(CASE WHEN session_status = 'END' THEN msg_ts END) as charge_end_time,
     MIN(CASE WHEN session_status = 'START' THEN soc END) as start_soc,
     MAX(CASE WHEN session_status = 'END' THEN soc END) as end_soc,
     AVG(power_w) as avg_charging_power,
@@ -230,18 +230,18 @@ SELECT
         WHEN MAX(CASE WHEN session_status = 'END' THEN soc END) > MIN(CASE WHEN session_status = 'START' THEN soc END)
         THEN ROUND(
             (MAX(CASE WHEN session_status = 'END' THEN soc END) - MIN(CASE WHEN session_status = 'START' THEN soc END)) / 
-            (EXTRACT(EPOCH FROM (MAX(CASE WHEN session_status = 'END' THEN TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS') END) - MIN(CASE WHEN session_status = 'START' THEN TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS') END))) / 3600), 2
+            (EXTRACT(EPOCH FROM (MAX(CASE WHEN session_status = 'END' THEN msg_ts END) - MIN(CASE WHEN session_status = 'START' THEN TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS') END))) / 3600), 2
         )
         ELSE 0
     END as soc_per_hour,  -- 시간당 SOC 증가량
     -- 충전 시간
     EXTRACT(EPOCH FROM (
-        MAX(CASE WHEN session_status = 'END' THEN TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS') END) - 
-        MIN(CASE WHEN session_status = 'START' THEN TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS') END)
+        MAX(CASE WHEN session_status = 'END' THEN msg_ts END) - 
+        MIN(CASE WHEN session_status = 'START' THEN msg_ts END)
     )) / 3600 as charging_hours
 FROM session_summary
 GROUP BY device_no, car_type, session_id
-HAVING MIN(CASE WHEN session_status = 'START' THEN TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS') END) IS NOT NULL;
+HAVING MIN(CASE WHEN session_status = 'START' THEN msg_ts END) IS NOT NULL;
 
 -- 4. 온도-전압 상관관계 분석 
 CREATE MATERIALIZED VIEW temperature_voltage_correlation_mv AS
@@ -249,7 +249,7 @@ WITH temp_volt_data AS (
     SELECT 
         device_no,
         car_type,
-        msg_time,
+        msg_ts,
         soc,
         soh,
         pack_volt,
@@ -258,9 +258,9 @@ WITH temp_volt_data AS (
         max_cell_volt,
         min_cell_volt,
         -- 온도 변화율 (이전 값 대비)
-        LAG(mod_avg_temp) OVER (PARTITION BY device_no ORDER BY TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS')) as prev_temp,
+        LAG(mod_avg_temp) OVER (PARTITION BY device_no ORDER BY msg_ts) as prev_temp,
         -- 전압 변화율 (이전 값 대비)
-        LAG(pack_volt) OVER (PARTITION BY device_no ORDER BY TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS')) as prev_volt
+        LAG(pack_volt) OVER (PARTITION BY device_no ORDER BY msg_ts) as prev_volt
     FROM bongo3_bms_data
     WHERE mod_avg_temp IS NOT NULL AND pack_volt > 0
 ),
@@ -268,7 +268,7 @@ correlation_analysis AS (
     SELECT 
         device_no,
         car_type,
-        msg_time,
+        msg_ts,
         soc,
         soh,
         pack_volt,
@@ -289,13 +289,13 @@ correlation_analysis AS (
             ELSE 0
         END as volt_change_rate,
         -- 온도-전압 상관계수 (이동 평균)
-        AVG(mod_avg_temp * pack_volt) OVER (PARTITION BY device_no ORDER BY TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS') ROWS BETWEEN 10 PRECEDING AND CURRENT ROW) as temp_volt_correlation
+        AVG(mod_avg_temp * pack_volt) OVER (PARTITION BY device_no ORDER BY msg_ts ROWS BETWEEN 10 PRECEDING AND CURRENT ROW) as temp_volt_correlation
     FROM temp_volt_data
 )
 SELECT 
     device_no,
     car_type,
-    msg_time,
+    msg_ts,
     soc,
     soh,
     pack_volt,
@@ -326,13 +326,13 @@ WITH monthly_performance AS (
     SELECT 
         device_no,
         car_type,
-        DATE_TRUNC('month', TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS')) as month,
+        DATE_TRUNC('month', msg_ts) as month,
         AVG(soh) as avg_soh,
         AVG(mod_avg_temp) as avg_temp,
         AVG((max_cell_volt - min_cell_volt) / pack_volt * 100) as avg_balance_index,
         COUNT(*) as data_points
     FROM bongo3_bms_data
-    GROUP BY device_no, car_type, DATE_TRUNC('month', TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS'))
+    GROUP BY device_no, car_type, DATE_TRUNC('month', msg_ts)
 ),
 performance_changes AS (
     SELECT 

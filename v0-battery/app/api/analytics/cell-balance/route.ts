@@ -4,124 +4,97 @@ import { pool } from "@/lib/database"
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const vehicleType = searchParams.get("car_type")
-    const timeRange = searchParams.get("time_range") || "30d"
+    const carType = searchParams.get('car_type') || 'all'
+    const trigger = searchParams.get('trigger') || 'all'
+    const limit = parseInt(searchParams.get('limit') || '100')
 
-    const params: any[] = []
-    const whereConditions: string[] = []
-
-    if (vehicleType && vehicleType !== "all") {
-      whereConditions.push(`car_type = $${params.length + 1}`)
-      params.push(vehicleType.toUpperCase())
+    // 차종 필터
+    let carTypeFilter = ''
+    if (carType !== 'all') {
+      carTypeFilter = `AND car_type = '${carType.toUpperCase()}'`
     }
 
-    // 시간 범위 설정 (실제 데이터 범위: 2022-11-30 ~ 2023-08-31)
-    const toTs = "TO_TIMESTAMP(msg_time, 'YY-MM-DD HH24:MI:SS')"
-    let timeFilter = ""
-    switch (timeRange) {
-      case "7d":
-        timeFilter = `AND ${toTs} >= '2023-08-24' AND ${toTs} <= '2023-08-31'`
-        break
-      case "30d":
-        timeFilter = `AND ${toTs} >= '2023-08-01' AND ${toTs} <= '2023-08-31'`
-        break
-      case "90d":
-        timeFilter = `AND ${toTs} >= '2023-06-01' AND ${toTs} <= '2023-08-31'`
-        break
-      default:
-        timeFilter = `AND ${toTs} >= '2023-08-01' AND ${toTs} <= '2023-08-31'`
+    // 트리거 필터
+    let triggerFilter = ''
+    if (trigger !== 'all') {
+      triggerFilter = `AND imbalance_trigger = '${trigger}'`
     }
 
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(" AND ")}` : ""
-
-    // 디버깅용: 간단한 쿼리로 시작
-    console.log("Debug - timeFilter:", timeFilter)
-    console.log("Debug - whereClause:", whereClause)
-
-    // 셀 밸런스 트렌드 분석 (단순화)
-    const balanceTrendsQuery = `
+    // 셀 밸런스 데이터 조회
+    const balanceQuery = `
       SELECT 
-        '2023-08-01'::date AS date,
-        AVG(cell_balance_index) AS avg_balance_index,
-        0 AS balance_variability,
-        COUNT(*) AS data_points,
-        COUNT(CASE WHEN cell_balance_index > 2.0 THEN 1 END) AS high_imbalance_count,
-        COUNT(CASE WHEN cell_balance_index > 1.5 THEN 1 END) AS moderate_imbalance_count
+        device_no,
+        car_type,
+        msg_time,
+        soc,
+        pack_current,
+        mod_avg_temp,
+        cell_balance_index,
+        speed,
+        lat,
+        lng,
+        fuel_pct,
+        imbalance_trigger
       FROM cell_balance_mv
-      ${whereClause}
-      ${timeFilter}
-      GROUP BY 1
-      ORDER BY date DESC
-      LIMIT 30
+      WHERE 1=1 ${carTypeFilter} ${triggerFilter}
+      ORDER BY cell_balance_index DESC, msg_time DESC
+      LIMIT $1
     `
 
-    const balanceTriggersQuery = `
+    const balanceResult = await pool.query(balanceQuery, [limit])
+
+    // 밸런스 상태별 통계
+    const statsQuery = `
+      SELECT 
+        COUNT(CASE WHEN cell_balance_index <= 0.5 THEN 1 END) as excellent_balance_count,
+        COUNT(CASE WHEN cell_balance_index > 0.5 AND cell_balance_index <= 1.0 THEN 1 END) as good_balance_count,
+        COUNT(CASE WHEN cell_balance_index > 1.0 AND cell_balance_index <= 2.0 THEN 1 END) as moderate_balance_count,
+        COUNT(CASE WHEN cell_balance_index > 2.0 THEN 1 END) as poor_balance_count,
+        COUNT(*) as total_count,
+        ROUND(AVG(cell_balance_index), 3) as avg_balance_index,
+        ROUND(STDDEV(cell_balance_index), 3) as balance_variability
+      FROM cell_balance_mv
+      WHERE 1=1 ${carTypeFilter}
+    `
+
+    const statsResult = await pool.query(statsQuery)
+
+    // 트리거별 통계
+    const triggerStatsQuery = `
       SELECT 
         imbalance_trigger,
-        COUNT(*) as occurrence_count,
-        AVG(cell_balance_index) as avg_imbalance_level,
-        AVG(mod_avg_temp) as avg_temperature,
-        AVG(ABS(pack_current)) as avg_current
+        COUNT(*) as count,
+        ROUND(AVG(cell_balance_index), 3) as avg_balance_index,
+        ROUND(AVG(mod_avg_temp), 2) as avg_temp,
+        ROUND(AVG(soc), 2) as avg_soc
       FROM cell_balance_mv
-      ${whereClause}
-      ${timeFilter}
+      WHERE 1=1 ${carTypeFilter}
       GROUP BY imbalance_trigger
-      ORDER BY occurrence_count DESC
-      LIMIT 10
+      ORDER BY count DESC
     `
 
-    // 차종별 밸런스 특성 비교 (MATERIALIZED VIEW 사용)
-    const vehicleComparisonQuery = `
-      SELECT 
-        car_type,
-        AVG(cell_balance_index) as avg_balance_index,
-        AVG(cell_balance_index * cell_balance_index) - AVG(cell_balance_index) * AVG(cell_balance_index) as balance_variability,
-        COUNT(*) as total_records,
-        COUNT(CASE WHEN cell_balance_index > 2.0 THEN 1 END) as high_imbalance_records,
-        ROUND(COUNT(CASE WHEN cell_balance_index > 2.0 THEN 1 END) * 100.0 / COUNT(*), 2) as imbalance_percentage
-      FROM cell_balance_mv
-      WHERE 1=1
-      ${timeFilter}
-      GROUP BY car_type
-      ORDER BY avg_balance_index
-      LIMIT 5
-    `
-
-    // // 디버깅용: 가장 간단한 쿼리부터 테스트
-    // console.log("Debug - Executing queries...")
-    
-    const testQuery = `SELECT COUNT(*) FROM cell_balance_mv WHERE 1=1 ${timeFilter}`
-    // console.log("Debug - Test query:", testQuery)
-    
-    const testResult = await pool.query(testQuery, params)
-    // console.log("Debug - Test result count:", testResult.rows[0]?.count)
-    
-    const [trendsResult, triggersResult, comparisonResult] = await Promise.all([
-      pool.query(balanceTrendsQuery, params),
-      pool.query(balanceTriggersQuery, params),
-      pool.query(vehicleComparisonQuery, params)
-    ])
+    const triggerStatsResult = await pool.query(triggerStatsQuery)
 
     return NextResponse.json({
       success: true,
       data: {
-        balance_trends: trendsResult.rows,
-        balance_triggers: triggersResult.rows,
-        vehicle_comparison: comparisonResult.rows,
-        time_range: timeRange,
-        filters_applied: {
-          vehicle_type: vehicleType,
+        balance_data: balanceResult.rows,
+        statistics: statsResult.rows[0] || {},
+        trigger_statistics: triggerStatsResult.rows,
+        meta: {
+          car_type: carType,
+          trigger: trigger,
+          total_records: balanceResult.rows.length,
+          limit: limit
         }
-      },
-      timestamp: new Date().toISOString()
+      }
     })
 
   } catch (error) {
-    console.error("Cell Balance Analysis API Error:", error)
+    console.error("Cell Balance API Error:", error)
     return NextResponse.json({ 
-      error: "Failed to fetch cell balance analysis data",
-      message: "셀 밸런스 분석 데이터를 가져오는데 실패했습니다."
+      error: "Failed to fetch cell balance data",
+      message: "셀 밸런스 데이터를 가져오는데 실패했습니다."
     }, { status: 500 })
   }
 }
-

@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { CellBalanceAnalysis } from "./cell-balance-analysis"
+import { DrivingPatternAnalysis } from "./driving-pattern-analysis"
+import { AnomalyDetectionAnalysis } from "./anomaly-detection-analysis"
 import { BatteryGauge } from "./battery-gauge"
 import { Battery, TrendingUp, AlertTriangle, Activity, Car, Zap } from "lucide-react"
 
@@ -108,115 +110,11 @@ export function AnalysisPage() {
         </TabsContent>
 
         <TabsContent value="driving-patterns" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">주행 모드 분석</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-blue-600">고속/도시</div>
-                <p className="text-xs text-muted-foreground">
-                  주행 조건별 성능 차이
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">BMS 반응 분석</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-purple-600">실시간</div>
-                <p className="text-xs text-muted-foreground">
-                  주행 조건별 BMS 반응 패턴
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">효율성 패턴</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">최적화</div>
-                <p className="text-xs text-muted-foreground">
-                  주행 조건별 에너지 효율성
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Car className="h-5 w-5" />
-                <span>주행 패턴 분석</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                주행 패턴 분석 컴포넌트가 여기에 표시됩니다.
-                <br />
-                API 엔드포인트: /api/analytics/driving-patterns
-              </div>
-            </CardContent>
-          </Card>
+          <DrivingPatternAnalysis />
         </TabsContent>
 
         <TabsContent value="anomaly-detection" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">이상 패턴 탐지</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">AI 기반</div>
-                <p className="text-xs text-muted-foreground">
-                  정상 패턴과 다른 이상 징후
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">위험도 등급</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-orange-600">Critical</div>
-                <p className="text-xs text-muted-foreground">
-                  위험도별 분류 및 대응
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">예측 분석</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-blue-600">미래</div>
-                <p className="text-xs text-muted-foreground">
-                  이상 패턴의 미래 전개 예측
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <AlertTriangle className="h-5 w-5" />
-                <span>이상 패턴 탐지</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                이상 패턴 탐지 컴포넌트가 여기에 표시됩니다.
-                <br />
-                API 엔드포인트: /api/analytics/anomaly-detection
-              </div>
-            </CardContent>
-          </Card>
+          <AnomalyDetectionAnalysis />
         </TabsContent>
 
         <TabsContent value="performance-trends" className="space-y-6">
