@@ -170,6 +170,6 @@ v0-battery/
 
 ## 🗄️ 데이터베이스 스키마
 
-<원본 데이터베이스 ERD>
+<원본 데이터베이스 ERD(미완성) - 일부>
 
 <img width="1209" height="464" alt="Image" src="https://github.com/user-attachments/assets/1e6d8ca0-beb8-4322-aa97-f798f133c232" />
