@@ -167,3 +167,9 @@ v0-battery/
 - **셀 밸런스**: 개별 셀 전압 균형
 - **온도 분포**: 배터리 팩 온도 모니터링
 - **충전 효율**: 충전 패턴 및 효율성
+
+## 🗄️ 데이터베이스 스키마
+
+<원본 데이터베이스 ERD>
+
+<img width="1209" height="464" alt="Image" src="https://github.com/user-attachments/assets/1e6d8ca0-beb8-4322-aa97-f798f133c232" />
