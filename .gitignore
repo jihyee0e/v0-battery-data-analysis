@@ -27,7 +27,6 @@ yarn-error.log*
 next-env.d.ts
 
 # 기존 프로젝트 
-integrated_data/
 venv/
 individual/
 requirements.txt
@@ -35,6 +34,8 @@ requirements.txt
 .*
 
 huggingface/
+splited_data/
+final_data/
 
 # 임시
 prepare.sql
