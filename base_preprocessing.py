@@ -455,7 +455,7 @@ if __name__ == "__main__":
     
     # splited_data 폴더 스캔해서 정제
     bp.process_directory(
-        "splited_data/aicar_2308_splited_by_cartype",  # 입력 폴더
-        "final_data/aicar_2308_splited_by_cartype",    # 출력 폴더
+        "splited_data",  # 입력 폴더
+        "final_data",    # 출력 폴더
         use_ray=False  # Ray 병렬처리 사용 여부
     )
