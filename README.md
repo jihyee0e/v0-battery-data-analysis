@@ -1,7 +1,5 @@
 # AICAR - v0-battery
 
-**메인은 `v0-battery`입니다. 나머지는 보조(오프라인 분석)입니다.**
-
 ## 📌 프로젝트 목적
 
 Next.js 기반 대시보드로 PostgreSQL에 저장된 BMS/GPS 데이터를 시각화하고 간단한 API를 제공합니다.

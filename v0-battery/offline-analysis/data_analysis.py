@@ -10,6 +10,7 @@ import os
 import json
 from pathlib import Path
 from datetime import datetime
+from multiprocessing import Pool, cpu_count
 
 def analyze_csv_file(file_path):
     """CSV 파일의 전체 데이터를 로드해서 기본 특성을 분석합니다."""
@@ -327,18 +328,17 @@ def save_analysis_results(all_results, output_dir="analysis_results"):
 
 def main():
     """메인 분석 함수"""
-    # 절대 경로 사용
-    base_path = Path("/mnt/hdd1/jihye0e/aicar-preprocessing/final_data")
+    base_path = Path("/mnt/hdd1/jihye0e/aicar-preprocessing/final_data/aicar_2308_splited_by_cartype")
     
     if not base_path.exists():
         print(f"❌ 경로가 존재하지 않습니다: {base_path}")
         return
     
-    # 실제 존재하는 파일들 찾기 (올바른 패턴 사용)
-    bms_files = list(base_path.glob("**/bms/*.csv"))
-    gps_files = list(base_path.glob("**/gps/*.csv"))
+    # 실제 존재하는 파일들 찾기
+    bms_files = list(base_path.glob("bms/**/*.csv"))
+    gps_files = list(base_path.glob("gps/**/*.csv"))
     
-    print("배터리 성능 시스템 데이터 분석 시작")
+    print("데이터 컬럼 분석 시작")
     print("="*60)
     print(f"분석할 BMS 파일: {len(bms_files)}개")
     print(f"분석할 GPS 파일: {len(gps_files)}개")
@@ -353,49 +353,121 @@ def main():
     }
     
     # BMS 데이터 분석
-    print("\n🔋 BMS 데이터 분석")
-    for file_path in bms_files:
-        if file_path.exists():
-            file_size = file_path.stat().st_size / (1024 * 1024)  # MB
-            stats, total_rows, columns = analyze_csv_file(file_path)
-            if stats is not None:
-                file_name = file_path.name
-                
-                file_result = {
-                    'file_size': file_size,
-                    'total_rows': total_rows,
-                    'total_columns': len(columns),
-                    'columns': stats
-                }
-                
-                # 배터리 데이터 특성 분석 (통계 기반)
-                analyze_battery_stats(stats, columns)
-                
-                all_results['files'][file_name] = file_result
+    # 병렬처리로 빠른 분석
+    print(f"\n🚀 병렬처리로 빠른 분석 시작 (CPU 코어: {cpu_count()}개)")
     
-    # GPS 데이터 분석  
-    print("\n\n📍 GPS 데이터 분석")
-    for file_path in gps_files:
-        if file_path.exists():
-            file_size = file_path.stat().st_size / (1024 * 1024)  # MB
-            stats, total_rows, columns = analyze_csv_file(file_path)
-            if stats is not None:
-                file_name = file_path.name
-                
-                file_result = {
-                    'file_size': file_size,
-                    'total_rows': total_rows,
-                    'total_columns': len(columns),
-                    'columns': stats
-                }
-                
-                # GPS 데이터 특성 분석 (통계 기반)
-                analyze_gps_stats(stats, columns)
-                
-                all_results['files'][file_name] = file_result
+    # 모든 파일을 하나의 리스트로 합치기
+    all_files = bms_files + gps_files
+    print(f"총 분석할 파일: {len(all_files)}개")
+    
+    # 병렬처리로 분석
+    with Pool(processes=cpu_count()) as pool:
+        results = pool.map(analyze_csv_file, all_files)
+    
+    # 결과 처리
+    for i, (file_path, result) in enumerate(zip(all_files, results)):
+        if result[0] is not None:  # stats가 None이 아닌 경우
+            stats, total_rows, columns = result
+            file_name = file_path.name
+            file_size = file_path.stat().st_size / (1024 * 1024)
+            
+            file_result = {
+                'file_size': file_size,
+                'total_rows': total_rows,
+                'total_columns': len(columns),
+                'columns': stats
+            }
+            
+            all_results['files'][file_name] = file_result
+            
+            # 진행 상황 출력
+            if (i + 1) % 10 == 0:
+                print(f"처리 완료: {i + 1}/{len(all_files)} 파일")
+    
+    print(f"✅ 병렬처리 완료: {len(all_results['files'])}개 파일 분석됨")
+    
+    # 2차 그룹화: 차종별, bms/gps별로 그룹화
+    print(f"\n🔍 2차 그룹화: 차종별, BMS/GPS별 분석")
+    grouped_data = analyze_by_cartype_and_type(all_results['files'], bms_files + gps_files)
     
     # 결과 저장
     save_analysis_results(all_results)
+
+def analyze_by_cartype_and_type(files_data, file_paths):
+    """차종별, bms/gps별로 그룹화해서 분석합니다."""
+    print(f"\n{'='*60}")
+    print("차종별, BMS/GPS별 분석")
+    print(f"{'='*60}")
+    
+    # 차종별, 타입별로 그룹화
+    grouped_data = {}
+    
+    # 파일 경로와 데이터 매핑
+    file_path_map = {}
+    for file_path in file_paths:
+        file_path_map[file_path.name] = file_path
+    
+    for file_name, file_data in files_data.items():
+        # 파일명에서 차종과 타입 추출
+        if 'bms' in file_name.lower():
+            data_type = 'BMS'
+        elif 'gps' in file_name.lower():
+            data_type = 'GPS'
+        else:
+            continue
+            
+        # 경로에서 차종 추출 (예: .../BONGO3/bms_xxx.csv)
+        file_path = file_path_map.get(file_name)
+        cartype = 'UNKNOWN'
+        if file_path:
+            for ct in ['BONGO3', 'GV60', 'PORTER2']:
+                if ct in str(file_path):
+                    cartype = ct
+                    break
+        
+        # 그룹화
+        key = f"{cartype}_{data_type}"
+        if key not in grouped_data:
+            grouped_data[key] = {
+                'cartype': cartype,
+                'data_type': data_type,
+                'files': [],
+                'total_files': 0,
+                'total_rows': 0,
+                'total_size_mb': 0
+            }
+        
+        grouped_data[key]['files'].append(file_name)
+        grouped_data[key]['total_files'] += 1
+        grouped_data[key]['total_rows'] += file_data['total_rows']
+        grouped_data[key]['total_size_mb'] += file_data['file_size']
+    
+    # 각 그룹별 분석 결과 출력
+    for key, group_data in grouped_data.items():
+        print(f"\n🚗 {group_data['cartype']} - {group_data['data_type']}")
+        print(f"   파일 수: {group_data['total_files']}개")
+        print(f"   총 행 수: {group_data['total_rows']:,}")
+        print(f"   총 크기: {group_data['total_size_mb']:.2f} MB")
+        
+        # 공통 컬럼들 분석
+        if group_data['files']:
+            first_file = group_data['files'][0]
+            if first_file in files_data:
+                first_file_data = files_data[first_file]
+                common_columns = ['device_no', 'car_type', 'time', 'lat', 'lng', 'speed', 'fuel_pct', 
+                                'soc', 'soh', 'pack_volt', 'pack_current']
+                
+                print(f"   📊 주요 컬럼 분석:")
+                for col in common_columns:
+                    if col in first_file_data['columns']:
+                        col_stats = first_file_data['columns'][col]
+                        print(f"     {col}: {col_stats['dtype']}, null율 {col_stats['null_percentage']:.1f}%")
+                        
+                        if 'min_val' in col_stats and 'max_val' in col_stats:
+                            if col_stats['min_val'] is not None and col_stats['max_val'] is not None:
+                                print(f"       범위: {col_stats['min_val']:.3f} ~ {col_stats['max_val']:.3f}")
+    
+    return grouped_data
 
 if __name__ == "__main__":
     main()
