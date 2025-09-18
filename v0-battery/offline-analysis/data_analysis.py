@@ -12,7 +12,7 @@ from pathlib import Path
 from datetime import datetime
 from multiprocessing import Pool, cpu_count
 
-def analyze_csv_file(file_path):
+def analyze_csv_file(file_path, show_columns=True):
     """CSV 파일의 전체 데이터를 로드해서 기본 특성을 분석합니다."""
     print(f"\n{'='*60}")
     print(f"파일 분석: {os.path.basename(file_path)}")
@@ -34,10 +34,15 @@ def analyze_csv_file(file_path):
         columns = first_chunk.columns.tolist()
         print(f"총 컬럼 수: {len(columns)}")
         
-        # 컬럼 정보 출력
-        print(f"\n컬럼 목록:")
-        for i, col in enumerate(columns):
-            print(f"{i+1:3d}. {col}")
+        # 컬럼 정보 출력 (첫 번째 파일에서만 상세 출력)
+        if show_columns:
+            print(f"\n컬럼 목록:")
+            for i, col in enumerate(columns):
+                print(f"{i+1:3d}. {col}")
+        else:
+            print(f"(컬럼 목록은 첫 번째 파일과 동일)")
+        
+        for col in columns:
             columns_info[col] = {
                 'dtype': str(first_chunk[col].dtype),
                 'total_count': 0,
@@ -54,36 +59,37 @@ def analyze_csv_file(file_path):
         chunk_iter = pd.read_csv(file_path, chunksize=chunk_size)
         for chunk_num, chunk in enumerate(chunk_iter):
             total_rows += len(chunk)
-            
-            # 각 컬럼별 통계 누적
-            for col in columns:
-                col_data = chunk[col]
-                col_info = columns_info[col]
-                
-                # 기본 통계
-                col_info['total_count'] += len(col_data)
-                col_info['non_null_count'] += col_data.count()
-                col_info['null_count'] += col_data.isnull().sum()
-                
-                # 고유값 수집 (메모리 절약을 위해 set 사용)
-                if col_data.dtype == 'object':
-                    col_info['unique_values'].update(col_data.dropna().astype(str))
-                else:
-                    col_info['unique_values'].update(col_data.dropna())
-                
-                # 숫자형 데이터 통계
-                if pd.api.types.is_numeric_dtype(col_data):
-                    non_null_data = col_data.dropna()
-                    if len(non_null_data) > 0:
-                        if col_info['min_val'] is None:
-                            col_info['min_val'] = non_null_data.min()
-                            col_info['max_val'] = non_null_data.max()
-                        else:
-                            col_info['min_val'] = min(col_info['min_val'], non_null_data.min())
-                            col_info['max_val'] = max(col_info['max_val'], non_null_data.max())
                         
-                        col_info['zero_count'] += (non_null_data == 0).sum()
-                        col_info['negative_count'] += (non_null_data < 0).sum()
+            # 각 컬럼별 통계 누적 (기존 컬럼 + 새로 추가된 컬럼)
+            for col in chunk.columns:
+                if col in columns_info:
+                    col_data = chunk[col]
+                    col_info = columns_info[col]
+                    
+                    # 기본 통계
+                    col_info['total_count'] += len(col_data)
+                    col_info['non_null_count'] += col_data.count()
+                    col_info['null_count'] += col_data.isnull().sum()
+                    
+                    # 고유값 수집 (메모리 절약을 위해 set 사용)
+                    if col_data.dtype == 'object':
+                        col_info['unique_values'].update(col_data.dropna().astype(str))
+                    else:
+                        col_info['unique_values'].update(col_data.dropna())
+                    
+                    # 숫자형 데이터 통계
+                    if pd.api.types.is_numeric_dtype(col_data):
+                        non_null_data = col_data.dropna()
+                        if len(non_null_data) > 0:
+                            if col_info['min_val'] is None:
+                                col_info['min_val'] = non_null_data.min()
+                                col_info['max_val'] = non_null_data.max()
+                            else:
+                                col_info['min_val'] = min(col_info['min_val'], non_null_data.min())
+                                col_info['max_val'] = max(col_info['max_val'], non_null_data.max())
+                            
+                            col_info['zero_count'] += (non_null_data == 0).sum()
+                            col_info['negative_count'] += (non_null_data < 0).sum()
             
             # 진행 상황 출력
             if (chunk_num + 1) % 10 == 0:
@@ -352,51 +358,57 @@ def main():
         'files': {}
     }
     
-    # BMS 데이터 분석
-    # 병렬처리로 빠른 분석
-    print(f"\n🚀 병렬처리로 빠른 분석 시작 (CPU 코어: {cpu_count()}개)")
+    # 1차 분석: BMS 데이터 분석
+    print("\n🔋 1차 분석: BMS 데이터 분석")
+    for i, file_path in enumerate(bms_files):
+        if file_path.exists():
+            file_size = file_path.stat().st_size / (1024 * 1024)  # MB
+            # 첫 번째 파일에서만 컬럼 목록 상세 출력
+            show_columns = (i == 0)
+            stats, total_rows, columns = analyze_csv_file(file_path, show_columns)
+            if stats is not None:
+                file_name = file_path.name
+                
+                file_result = {
+                    'file_size': file_size,
+                    'total_rows': total_rows,
+                    'total_columns': len(columns),
+                    'columns': stats
+                }
+                
+                all_results['files'][file_name] = file_result
     
-    # 모든 파일을 하나의 리스트로 합치기
-    all_files = bms_files + gps_files
-    print(f"총 분석할 파일: {len(all_files)}개")
+    # 1차 분석: GPS 데이터 분석  
+    print("\n\n📍 1차 분석: GPS 데이터 분석")
+    for i, file_path in enumerate(gps_files):
+        if file_path.exists():
+            file_size = file_path.stat().st_size / (1024 * 1024)  # MB
+            # 첫 번째 파일에서만 컬럼 목록 상세 출력
+            show_columns = (i == 0)
+            stats, total_rows, columns = analyze_csv_file(file_path, show_columns)
+            if stats is not None:
+                file_name = file_path.name
+                
+                file_result = {
+                    'file_size': file_size,
+                    'total_rows': total_rows,
+                    'total_columns': len(columns),
+                    'columns': stats
+                }
+                
+                all_results['files'][file_name] = file_result
     
-    # 병렬처리로 분석
-    with Pool(processes=cpu_count()) as pool:
-        results = pool.map(analyze_csv_file, all_files)
-    
-    # 결과 처리
-    for i, (file_path, result) in enumerate(zip(all_files, results)):
-        if result[0] is not None:  # stats가 None이 아닌 경우
-            stats, total_rows, columns = result
-            file_name = file_path.name
-            file_size = file_path.stat().st_size / (1024 * 1024)
-            
-            file_result = {
-                'file_size': file_size,
-                'total_rows': total_rows,
-                'total_columns': len(columns),
-                'columns': stats
-            }
-            
-            all_results['files'][file_name] = file_result
-            
-            # 진행 상황 출력
-            if (i + 1) % 10 == 0:
-                print(f"처리 완료: {i + 1}/{len(all_files)} 파일")
-    
-    print(f"✅ 병렬처리 완료: {len(all_results['files'])}개 파일 분석됨")
-    
-    # 2차 그룹화: 차종별, bms/gps별로 그룹화
-    print(f"\n🔍 2차 그룹화: 차종별, BMS/GPS별 분석")
+    # 2차 분석: 차종별로 1차 결과들을 집계
+    print(f"\n🔍 2차 분석: 차종별 통계 집계")
     grouped_data = analyze_by_cartype_and_type(all_results['files'], bms_files + gps_files)
     
     # 결과 저장
     save_analysis_results(all_results)
 
 def analyze_by_cartype_and_type(files_data, file_paths):
-    """차종별, bms/gps별로 그룹화해서 분석합니다."""
+    """2차 분석: 차종별로 1차 결과들을 집계합니다."""
     print(f"\n{'='*60}")
-    print("차종별, BMS/GPS별 분석")
+    print("2차 분석: 차종별 통계 집계")
     print(f"{'='*60}")
     
     # 차종별, 타입별로 그룹화
@@ -434,13 +446,44 @@ def analyze_by_cartype_and_type(files_data, file_paths):
                 'files': [],
                 'total_files': 0,
                 'total_rows': 0,
-                'total_size_mb': 0
+                'total_size_mb': 0,
+                'column_stats': {}  # 컬럼별 통계 집계용
             }
         
         grouped_data[key]['files'].append(file_name)
         grouped_data[key]['total_files'] += 1
         grouped_data[key]['total_rows'] += file_data['total_rows']
         grouped_data[key]['total_size_mb'] += file_data['file_size']
+        
+        # 컬럼별 통계 집계
+        for col_name, col_stats in file_data['columns'].items():
+            if col_name not in grouped_data[key]['column_stats']:
+                grouped_data[key]['column_stats'][col_name] = {
+                    'dtype': col_stats['dtype'],
+                    'total_count': 0,
+                    'null_count': 0,
+                    'min_vals': [],
+                    'max_vals': [],
+                    'null_percentages': [],
+                    'zero_counts': [],
+                    'negative_counts': []
+                }
+            
+            # 통계값들 수집
+            col_agg = grouped_data[key]['column_stats'][col_name]
+            col_agg['total_count'] += col_stats['total_count']
+            col_agg['null_count'] += col_stats['null_count']
+            
+            # min/max 값들 수집
+            if col_stats.get('min_val') is not None:
+                col_agg['min_vals'].append(col_stats['min_val'])
+            if col_stats.get('max_val') is not None:
+                col_agg['max_vals'].append(col_stats['max_val'])
+            
+            # null율, 0값, 음수값 수집
+            col_agg['null_percentages'].append(col_stats.get('null_percentage', 0))
+            col_agg['zero_counts'].append(col_stats.get('zero_count', 0))
+            col_agg['negative_counts'].append(col_stats.get('negative_count', 0))
     
     # 각 그룹별 분석 결과 출력
     for key, group_data in grouped_data.items():
@@ -449,23 +492,30 @@ def analyze_by_cartype_and_type(files_data, file_paths):
         print(f"   총 행 수: {group_data['total_rows']:,}")
         print(f"   총 크기: {group_data['total_size_mb']:.2f} MB")
         
-        # 공통 컬럼들 분석
-        if group_data['files']:
-            first_file = group_data['files'][0]
-            if first_file in files_data:
-                first_file_data = files_data[first_file]
-                common_columns = ['device_no', 'car_type', 'time', 'lat', 'lng', 'speed', 'fuel_pct', 
-                                'soc', 'soh', 'pack_volt', 'pack_current']
-                
-                print(f"   📊 주요 컬럼 분석:")
-                for col in common_columns:
-                    if col in first_file_data['columns']:
-                        col_stats = first_file_data['columns'][col]
-                        print(f"     {col}: {col_stats['dtype']}, null율 {col_stats['null_percentage']:.1f}%")
-                        
-                        if 'min_val' in col_stats and 'max_val' in col_stats:
-                            if col_stats['min_val'] is not None and col_stats['max_val'] is not None:
-                                print(f"       범위: {col_stats['min_val']:.3f} ~ {col_stats['max_val']:.3f}")
+        # 모든 컬럼 분석 (차종별 통합 통계)
+        print(f"   📊 모든 컬럼 통합 통계:")
+        for col in group_data['column_stats'].keys():
+            col_agg = group_data['column_stats'][col]
+            
+            # 통합 통계 계산
+            overall_min = min(col_agg['min_vals']) if col_agg['min_vals'] else None
+            overall_max = max(col_agg['max_vals']) if col_agg['max_vals'] else None
+            avg_null_percentage = sum(col_agg['null_percentages']) / len(col_agg['null_percentages']) if col_agg['null_percentages'] else 0
+            total_zero_count = sum(col_agg['zero_counts'])
+            total_negative_count = sum(col_agg['negative_counts'])
+            
+            print(f"     {col}:")
+            print(f"       데이터 타입: {col_agg['dtype']}")
+            print(f"       전체 행 수: {col_agg['total_count']:,}")
+            print(f"       전체 null 수: {col_agg['null_count']:,}")
+            print(f"       평균 null율: {avg_null_percentage:.1f}%")
+            
+            if overall_min is not None and overall_max is not None:
+                print(f"       전체 범위: {overall_min:.3f} ~ {overall_max:.3f}")
+            if total_zero_count > 0:
+                print(f"       전체 0값 수: {total_zero_count:,}")
+            if total_negative_count > 0:
+                print(f"       전체 음수값 수: {total_negative_count:,}")
     
     return grouped_data
 
