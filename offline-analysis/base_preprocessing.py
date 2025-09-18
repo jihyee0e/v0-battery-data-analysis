@@ -431,7 +431,8 @@ class BasePreprocessor:
                     
             else:
                 for category in categories:
-                    file_paths = list(root.rglob(f"**/{category}/**/*.csv"))
+                    # file_paths = list(root.rglob(f"**/{category}/**/*.csv"))
+                    file_paths = list(root.rglob("*.csv"))
                     if not file_paths:
                         continue
                     

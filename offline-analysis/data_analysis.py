@@ -22,23 +22,96 @@ def analyze_csv_file(file_path):
         file_size = os.path.getsize(file_path) / (1024 * 1024)  # MB
         print(f"파일 크기: {file_size:.2f} MB")
         
-        # 전체 데이터 로드
-        print("전체 데이터 로딩 중...")
-        df = pd.read_csv(file_path)
+        # 청크 단위로 데이터 분석
+        print("청크 단위 데이터 분석 중...")
+        chunk_size = 10000
+        total_rows = 0
+        columns_info = {}
         
-        print(f"전체 데이터 행 수: {len(df):,}")
-        print(f"총 컬럼 수: {len(df.columns)}")
+        # 첫 번째 청크로 컬럼 정보 확인
+        first_chunk = pd.read_csv(file_path, nrows=1)
+        columns = first_chunk.columns.tolist()
+        print(f"총 컬럼 수: {len(columns)}")
         
         # 컬럼 정보 출력
         print(f"\n컬럼 목록:")
-        for i, col in enumerate(df.columns):
+        for i, col in enumerate(columns):
             print(f"{i+1:3d}. {col}")
+            columns_info[col] = {
+                'dtype': str(first_chunk[col].dtype),
+                'total_count': 0,
+                'non_null_count': 0,
+                'null_count': 0,
+                'unique_values': set(),
+                'min_val': None,
+                'max_val': None,
+                'zero_count': 0,
+                'negative_count': 0
+            }
         
-        return df
+        # 청크별로 전체 데이터 처리
+        chunk_iter = pd.read_csv(file_path, chunksize=chunk_size)
+        for chunk_num, chunk in enumerate(chunk_iter):
+            total_rows += len(chunk)
+            
+            # 각 컬럼별 통계 누적
+            for col in columns:
+                col_data = chunk[col]
+                col_info = columns_info[col]
+                
+                # 기본 통계
+                col_info['total_count'] += len(col_data)
+                col_info['non_null_count'] += col_data.count()
+                col_info['null_count'] += col_data.isnull().sum()
+                
+                # 고유값 수집 (메모리 절약을 위해 set 사용)
+                if col_data.dtype == 'object':
+                    col_info['unique_values'].update(col_data.dropna().astype(str))
+                else:
+                    col_info['unique_values'].update(col_data.dropna())
+                
+                # 숫자형 데이터 통계
+                if pd.api.types.is_numeric_dtype(col_data):
+                    non_null_data = col_data.dropna()
+                    if len(non_null_data) > 0:
+                        if col_info['min_val'] is None:
+                            col_info['min_val'] = non_null_data.min()
+                            col_info['max_val'] = non_null_data.max()
+                        else:
+                            col_info['min_val'] = min(col_info['min_val'], non_null_data.min())
+                            col_info['max_val'] = max(col_info['max_val'], non_null_data.max())
+                        
+                        col_info['zero_count'] += (non_null_data == 0).sum()
+                        col_info['negative_count'] += (non_null_data < 0).sum()
+            
+            # 진행 상황 출력
+            if (chunk_num + 1) % 10 == 0:
+                print(f"처리된 청크: {chunk_num + 1}, 누적 행 수: {total_rows:,}")
+        
+        print(f"전체 데이터 행 수: {total_rows:,}")
+        
+        # 최종 통계 정리
+        final_stats = {}
+        for col, col_info in columns_info.items():
+            final_stats[col] = {
+                'dtype': col_info['dtype'],
+                'total_count': col_info['total_count'],
+                'non_null_count': col_info['non_null_count'],
+                'null_count': col_info['null_count'],
+                'null_percentage': (col_info['null_count'] / col_info['total_count']) * 100 if col_info['total_count'] > 0 else 0,
+                'unique_count': len(col_info['unique_values']),
+                'min_val': col_info['min_val'],
+                'max_val': col_info['max_val'],
+                'zero_count': col_info['zero_count'],
+                'negative_count': col_info['negative_count']
+            }
+        
+        return final_stats, total_rows, columns
         
     except Exception as e:
         print(f"파일 읽기 오류: {e}")
-        return None
+        print(f"파일 경로: {file_path}")
+        return None, 0, []
 
 def analyze_column_stats(df, column_name):
     """특정 컬럼의 기본 통계 정보를 분석합니다."""
@@ -109,8 +182,8 @@ def analyze_gps_data(df):
             else:
                 print(f"  - 고유값: {col_data.unique()}")
 
-def analyze_battery_data(df):
-    """배터리 관련 데이터의 특성을 분석합니다."""
+def analyze_battery_stats(stats, columns):
+    """배터리 관련 데이터의 특성을 통계 기반으로 분석합니다."""
     print(f"\n{'='*40}")
     print("배터리 데이터 분석")
     print(f"{'='*40}")
@@ -123,33 +196,65 @@ def analyze_battery_data(df):
     
     print("\n🔍 핵심 컬럼들 (모든 분석에서 사용):")
     for col in core_columns:
-        if col in df.columns:
-            col_data = df[col]
+        if col in stats:
+            col_stat = stats[col]
             print(f"\n{col}:")
-            print(f"  - 데이터 타입: {col_data.dtype}")
-            print(f"  - null 개수: {col_data.isnull().sum():,}")
-            print(f"  - 고유값 개수: {col_data.nunique():,}")
+            print(f"  - 데이터 타입: {col_stat['dtype']}")
+            print(f"  - null 개수: {col_stat['null_count']:,}")
+            print(f"  - 고유값 개수: {col_stat['unique_count']:,}")
             
-            if pd.api.types.is_numeric_dtype(col_data):
-                print(f"  - 범위: {col_data.min():.3f} ~ {col_data.max():.3f}")
-                print(f"  - 0값 개수: {(col_data == 0).sum():,}")
-            else:
-                print(f"  - 고유값: {col_data.unique()}")
+            if col_stat['min_val'] is not None and col_stat['max_val'] is not None:
+                print(f"  - 범위: {col_stat['min_val']:.3f} ~ {col_stat['max_val']:.3f}")
+                print(f"  - 0값 개수: {col_stat['zero_count']:,}")
     
     print("\n📊 추가 컬럼들 (일부 분석에서 사용):")
     for col in additional_columns:
-        if col in df.columns:
-            col_data = df[col]
+        if col in stats:
+            col_stat = stats[col]
             print(f"\n{col}:")
-            print(f"  - 데이터 타입: {col_data.dtype}")
-            print(f"  - null 개수: {col_data.isnull().sum():,}")
-            print(f"  - 고유값 개수: {col_data.nunique():,}")
+            print(f"  - 데이터 타입: {col_stat['dtype']}")
+            print(f"  - null 개수: {col_stat['null_count']:,}")
+            print(f"  - 고유값 개수: {col_stat['unique_count']:,}")
             
-            if pd.api.types.is_numeric_dtype(col_data):
-                print(f"  - 범위: {col_data.min():.3f} ~ {col_data.max():.3f}")
-                print(f"  - 0값 개수: {(col_data == 0).sum():,}")
-            else:
-                print(f"  - 고유값: {col_data.unique()}")
+            if col_stat['min_val'] is not None and col_stat['max_val'] is not None:
+                print(f"  - 범위: {col_stat['min_val']:.3f} ~ {col_stat['max_val']:.3f}")
+                print(f"  - 0값 개수: {col_stat['zero_count']:,}")
+
+def analyze_gps_stats(stats, columns):
+    """GPS 데이터의 주요 컬럼 특성을 통계 기반으로 확인합니다."""
+    print(f"\n{'='*40}")
+    print("GPS 컬럼 확인")
+    print(f"{'='*40}")
+    
+    # SQL에서 실제로 사용되는 핵심 컬럼들
+    core_columns = ['device_no', 'car_type', 'time', 'lat', 'lng', 'speed', 'fuel_pct']
+    additional_columns = ['direction', 'hdop', 'state', 'mode']
+    
+    print("\n🔍 핵심 컬럼:")
+    for col in core_columns:
+        if col in stats:
+            col_stat = stats[col]
+            print(f"\n{col}:")
+            print(f"  - 데이터 타입: {col_stat['dtype']}")
+            print(f"  - null 개수: {col_stat['null_count']:,}")
+            print(f"  - 고유값 개수: {col_stat['unique_count']:,}")
+            
+            if col_stat['min_val'] is not None and col_stat['max_val'] is not None:
+                print(f"  - 범위: {col_stat['min_val']:.3f} ~ {col_stat['max_val']:.3f}")
+                print(f"  - 0값 개수: {col_stat['zero_count']:,}")
+    
+    print("\n📊 추가 컬럼들 (일부 분석에서 사용):")
+    for col in additional_columns:
+        if col in stats:
+            col_stat = stats[col]
+            print(f"\n{col}:")
+            print(f"  - 데이터 타입: {col_stat['dtype']}")
+            print(f"  - null 개수: {col_stat['null_count']:,}")
+            print(f"  - 고유값 개수: {col_stat['unique_count']:,}")
+            
+            if col_stat['min_val'] is not None and col_stat['max_val'] is not None:
+                print(f"  - 범위: {col_stat['min_val']:.3f} ~ {col_stat['max_val']:.3f}")
+                print(f"  - 0값 개수: {col_stat['zero_count']:,}")
     
 
 def save_analysis_results(all_results, output_dir="analysis_results"):
@@ -178,8 +283,8 @@ def save_analysis_results(all_results, output_dir="analysis_results"):
                 'null_count': col_stats.get('null_count', 0),
                 'null_percentage': col_stats.get('null_percentage', 0),
                 'unique_count': col_stats.get('unique_count', 0),
-                'min_value': col_stats.get('min', ''),
-                'max_value': col_stats.get('max', ''),
+                'min_value': col_stats.get('min_val', ''),
+                'max_value': col_stats.get('max_val', ''),
                 'zero_count': col_stats.get('zero_count', ''),
                 'negative_count': col_stats.get('negative_count', '')
             }
@@ -222,16 +327,25 @@ def save_analysis_results(all_results, output_dir="analysis_results"):
 
 def main():
     """메인 분석 함수"""
-    base_path = Path("final_data")
+    # 절대 경로 사용
+    base_path = Path("/mnt/hdd1/jihye0e/aicar-preprocessing/final_data")
     
-    # 실제 존재하는 파일들 찾기
-    bms_files = list(base_path.glob("**/*bms*.csv"))
-    gps_files = list(base_path.glob("**/*gps*.csv"))
+    if not base_path.exists():
+        print(f"❌ 경로가 존재하지 않습니다: {base_path}")
+        return
+    
+    # 실제 존재하는 파일들 찾기 (올바른 패턴 사용)
+    bms_files = list(base_path.glob("**/bms/*.csv"))
+    gps_files = list(base_path.glob("**/gps/*.csv"))
     
     print("배터리 성능 시스템 데이터 분석 시작")
     print("="*60)
     print(f"분석할 BMS 파일: {len(bms_files)}개")
     print(f"분석할 GPS 파일: {len(gps_files)}개")
+    
+    if len(bms_files) == 0 and len(gps_files) == 0:
+        print("❌ 분석할 파일이 없습니다.")
+        return
     
     all_results = {
         'analysis_time': datetime.now().isoformat(),
@@ -242,25 +356,20 @@ def main():
     print("\n🔋 BMS 데이터 분석")
     for file_path in bms_files:
         if file_path.exists():
-            df = analyze_csv_file(file_path)
-            if df is not None:
+            file_size = file_path.stat().st_size / (1024 * 1024)  # MB
+            stats, total_rows, columns = analyze_csv_file(file_path)
+            if stats is not None:
                 file_name = file_path.name
-                file_size = file_path.stat().st_size / (1024 * 1024)
                 
                 file_result = {
                     'file_size': file_size,
-                    'total_rows': len(df),
-                    'total_columns': len(df.columns),
-                    'columns': {}
+                    'total_rows': total_rows,
+                    'total_columns': len(columns),
+                    'columns': stats
                 }
                 
-                analyze_battery_data(df)
-                
-                # 모든 컬럼 분석
-                for col in df.columns:
-                    stats = analyze_column_stats(df, col)
-                    if stats:
-                        file_result['columns'][col] = stats
+                # 배터리 데이터 특성 분석 (통계 기반)
+                analyze_battery_stats(stats, columns)
                 
                 all_results['files'][file_name] = file_result
     
@@ -268,25 +377,20 @@ def main():
     print("\n\n📍 GPS 데이터 분석")
     for file_path in gps_files:
         if file_path.exists():
-            df = analyze_csv_file(file_path)
-            if df is not None:
+            file_size = file_path.stat().st_size / (1024 * 1024)  # MB
+            stats, total_rows, columns = analyze_csv_file(file_path)
+            if stats is not None:
                 file_name = file_path.name
-                file_size = file_path.stat().st_size / (1024 * 1024)
                 
                 file_result = {
                     'file_size': file_size,
-                    'total_rows': len(df),
-                    'total_columns': len(df.columns),
-                    'columns': {}
+                    'total_rows': total_rows,
+                    'total_columns': len(columns),
+                    'columns': stats
                 }
                 
-                analyze_gps_data(df)
-                
-                # 모든 컬럼 분석
-                for col in df.columns:
-                    stats = analyze_column_stats(df, col)
-                    if stats:
-                        file_result['columns'][col] = stats
+                # GPS 데이터 특성 분석 (통계 기반)
+                analyze_gps_stats(stats, columns)
                 
                 all_results['files'][file_name] = file_result
     
