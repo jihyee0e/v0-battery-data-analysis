@@ -1,4 +1,4 @@
-# AICAR - v0-battery
+# AICAR
 
 ## 📌 프로젝트 목적
 
