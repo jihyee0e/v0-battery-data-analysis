@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  j-postgres:
+    image: postgres:15
+    container_name: aicar-postgres
+    environment:
+      POSTGRES_DB: ev_battery
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"  
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts:/docker-entrypoint-initdb.d
+      - ../integrated_data:/integrated_data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
