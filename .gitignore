@@ -16,3 +16,6 @@ venv/
 requirements.txt
 config.ini
 docker-compose.yml
+.next/
+node_modules/
+.next_local/
