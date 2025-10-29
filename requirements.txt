@@ -1,0 +1,40 @@
+# 기본 데이터 처리
+pandas
+numpy<2.0
+scipy
+scikit-learn
+
+# 딥러닝 프레임워크
+tensorflow==2.15.0
+torch
+tf-keras
+
+# 시각화
+matplotlib
+seaborn
+plotly
+
+# 웹 프레임워크
+streamlit
+flask
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# 데이터베이스
+psycopg2-binary==2.9.9
+sqlalchemy==2.0.23
+influxdb-client
+
+
+# 기타 유틸리티
+python-dotenv
+requests
+ray
+h5py
+pathlib
+ipykernel
+
+# 개발 도구
+pytest==7.4.3
+black==23.11.0
+flake8==6.1.0
