@@ -13,9 +13,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 venv/
-requirements.txt
 config.ini
 docker-compose.yml
 .next/
 node_modules/
 .next_local/
+data_analysis.ipynb
