@@ -26,7 +26,6 @@ export async function GET(request: Request) {
         |> filter(fn: (r) => exists r._value)
         |> sort(columns: ["_time"])
     `
-
     const sohHistory = await runQuery(sohHistoryQuery)
     
     if (sohHistory.length === 0) {
@@ -138,11 +137,11 @@ async function getCarTypeComparison(carType: string | null, deviceNo: string) {
     // 차량별로 그룹화
     const vehicleData: Record<string, any[]> = {}
     allSohData.forEach(row => {
-      const deviceNo = row.device_no
-      if (!vehicleData[deviceNo]) {
-        vehicleData[deviceNo] = []
+      const dev = row.device_no // ← 기존 deviceNo 대신 dev 사용
+      if (!vehicleData[dev]) {
+        vehicleData[dev] = []
       }
-      vehicleData[deviceNo].push({
+      vehicleData[dev].push({
         time: new Date(row._time),
         soh: Number(row._value)
       })

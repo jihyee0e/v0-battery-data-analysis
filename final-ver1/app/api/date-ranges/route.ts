@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
-import { influxDB, org, bucket } from "@/lib/database"
+// import { influxDB, org, bucket } from "@/lib/database"
 
 export async function GET() {
   try {
     // InfluxDB 연결 확인
-    const queryApi = influxDB.getQueryApi(org)
+    // const queryApi = influxDB.getQueryApi(org)
     
     return NextResponse.json({
       success: true,

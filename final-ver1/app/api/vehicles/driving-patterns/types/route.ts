@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { runQuery, getAvgSocSoh } from "@/lib/dashboard-utils"
+import { runQuery } from "@/lib/dashboard-utils"
 import { bucket } from "@/lib/database"
 
 export async function GET(request: Request) {

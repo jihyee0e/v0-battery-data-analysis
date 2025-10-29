@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { influxDB, org, bucket } from "@/lib/database"
+// import { influxDB, org, bucket } from "@/lib/database"
 import { getVehicleCounts, getAvgSocSoh, calculateTotalStats } from "@/lib/dashboard-utils"
 
 export async function GET() {

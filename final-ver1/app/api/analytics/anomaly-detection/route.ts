@@ -7,7 +7,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const carType = searchParams.get('car_type') || null
     const anomalyType = searchParams.get('anomaly_type') || null
-
+    
     // InfluxDB 기반 이상탐지 쿼리
     const anomalyQuery = `
       from(bucket: "${bucket}")
@@ -17,7 +17,6 @@ export async function GET(request: Request) {
         |> filter(fn: (r) => r._field == "soc" or r._field == "soh" or r._field == "pack_volt" or r._field == "pack_current" or r._field == "mod_avg_temp" or r._field == "max_cell_volt" or r._field == "min_cell_volt")
         |> filter(fn: (r) => exists r._value)
         |> sort(columns: ["_time"], desc: true)
-        |> limit(n: 20000)
     `
 
     const result = await runQuery(anomalyQuery)
@@ -52,11 +51,11 @@ export async function GET(request: Request) {
     
     // 차종별 기준값 계산
     const carTypeStats: Record<string, any> = {}
-    
+
     Object.values(vehicleData).forEach((vehicle: any) => {
-      const carType = vehicle.car_type
-      if (!carTypeStats[carType]) {
-        carTypeStats[carType] = {
+      const carTypeKey = (vehicle.car_type || 'UNKNOWN').toUpperCase()
+      if (!carTypeStats[carTypeKey]) {
+        carTypeStats[carTypeKey] = {
           soh: [],
           health: [],
           balance: [],
@@ -85,10 +84,11 @@ export async function GET(request: Request) {
         (Math.max(0, 100 - cellBalanceIndex * 10) * 0.2)
       ))
       
-      if (soh > 0) carTypeStats[carType].soh.push(soh)
-      if (compositeHealthIndex > 0) carTypeStats[carType].health.push(compositeHealthIndex)
-      if (cellBalanceIndex > 0) carTypeStats[carType].balance.push(cellBalanceIndex)
-      if (modAvgTemp > 0) carTypeStats[carType].temp.push(modAvgTemp)
+      const currentCarType = (vehicle.car_type || 'UNKNOWN').toUpperCase()
+      if (soh > 0) carTypeStats[currentCarType].soh.push(soh)
+      if (compositeHealthIndex > 0) carTypeStats[currentCarType].health.push(compositeHealthIndex)
+      if (cellBalanceIndex > 0) carTypeStats[currentCarType].balance.push(cellBalanceIndex)
+      if (modAvgTemp > 0) carTypeStats[currentCarType].temp.push(modAvgTemp)
     })
     
     // 차종별 평균과 표준편차 계산
@@ -146,11 +146,11 @@ export async function GET(request: Request) {
       const maxZscore = Math.max(sohZscore, healthZscore, balanceZscore, tempZscore)
       
       // 이상 유형 판별
-      let anomalyType = 'normal'
-      if (sohZscore > 2.5) anomalyType = 'soh_anomaly'
-      else if (healthZscore > 2.5) anomalyType = 'health_anomaly'
-      else if (balanceZscore > 2.5) anomalyType = 'balance_anomaly'
-      else if (tempZscore > 2.5) anomalyType = 'temp_anomaly'
+      let detectedType = 'normal'
+      if (sohZscore > 2.5) detectedType = 'soh_anomaly'
+      else if (healthZscore > 2.5) detectedType = 'health_anomaly'
+      else if (balanceZscore > 2.5) detectedType = 'balance_anomaly'
+      else if (tempZscore > 2.5) detectedType = 'temp_anomaly'
       
       // 위험도 분류
       let riskLevel = 'low'

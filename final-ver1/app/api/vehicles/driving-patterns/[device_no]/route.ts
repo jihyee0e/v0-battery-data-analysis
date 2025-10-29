@@ -19,11 +19,16 @@ function formatDuration(seconds: number): string {
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ device_no: string }> }
+  { params }: { params: { device_no: string } }
 ) {
   try {
+    // const [batteryRes, drivingRes, chargingRes, segmentRes] = await Promise.all([
+    //   fetch(`/api/vehicles/driving-patterns/battery/${deviceNo}`),
+    //   fetch(`/api/vehicles/driving-patterns/${deviceNo}`),
+    //   fetch(`/api/vehicles/driving-patterns/charging/${deviceNo}`),
+    //   fetch(`/api/vehicles/driving-patterns/segments/${deviceNo}`)
+    // ]);
     const { device_no: deviceNo } = await params
-
     // ipynb의 get_driving_distance_by_device 함수를 TypeScript로 변환
     const getDrivingDistanceByDevice = async (deviceNo: string) => {
       const RESET_THRESHOLD = -50   // km
@@ -36,7 +41,7 @@ export async function GET(
           |> filter(fn: (r) => r._field == "odometer")
           |> filter(fn: (r) => r.device_no == "${deviceNo}")
           |> filter(fn: (r) => exists r._value)
-          |> sort(columns: ["_time"])
+          |> sort(columns: ["_time"], desc: true)
       `
 
       try {
@@ -76,7 +81,7 @@ export async function GET(
             } else if (NOISE_THRESHOLD >= diff && diff > RESET_THRESHOLD) {
               // 소음: 무시
               continue
-            } else if (diff <= RESET_THRESHOLD || timeDiffMinutes >= 3) {
+            } else if (diff <= RESET_THRESHOLD || timeDiffMinutes >= 30) {
               // 리셋 이벤트 또는 3분 이상 정지: 세션 종료
               if (currentSession > 0 && sessionStartTime) {
                 sessions.push({
@@ -88,6 +93,9 @@ export async function GET(
               }
               currentSession = 0.0
               sessionStartTime = null
+            } else if (diff === 0 && timeDiffMinutes < 5) {
+              // 5분 미만 정차는 주행 유지
+              continue
             }
           }
 

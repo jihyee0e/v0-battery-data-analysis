@@ -4,11 +4,10 @@ import { runQuery } from '@/lib/dashboard-utils';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ device_no: string }> }
+  { params }: { params: { device_no: string } }
 ) {
   try {
     const { device_no: deviceNo } = await params
-
     // ipynb의 충전 분석 로직을 TypeScript로 변환
     const getChargingAnalysis = async (deviceNo: string) => {
       const query = `
@@ -16,9 +15,16 @@ export async function GET(
           |> range(start: 2022-01-01T00:00:00Z, stop: 2024-01-01T00:00:00Z)
           |> filter(fn: (r) => r._measurement == "aicar_bms")
           |> filter(fn: (r) => r.device_no == "${deviceNo}")
-          |> filter(fn: (r) => r._field == "soc" or r._field == "pack_current" or r._field == "pack_volt")
+          |> filter(fn: (r) => 
+            r._field == "soc" or 
+            r._field == "pack_current" or 
+            r._field == "pack_volt" or 
+            r._field == "chrg_cable_conn" or 
+            r._field == "fast_chrg_port_conn" or 
+            r._field == "slow_chrg_port_conn"
+          )
           |> filter(fn: (r) => exists r._value)
-          |> sort(columns: ["_time"])
+          |> sort(columns: ["_time"], desc: true)
       `
 
       try {
@@ -42,6 +48,29 @@ export async function GET(
           }
         }
 
+        // 성능 최적화: current와 voltage를 Map으로 변환 (시간 기반 조회)
+        const currentMap = new Map<number, number>()
+        const voltageMap = new Map<number, number>()
+        
+        currentData.forEach(d => currentMap.set(d.time.getTime(), d.value))
+        voltageData.forEach(d => voltageMap.set(d.time.getTime(), d.value))
+        
+        // 시간에 가장 가까운 값을 찾는 헬퍼 함수
+        const findNearestValue = (map: Map<number, number>, targetTime: number, tolerance: number = 60000): number => {
+          let minDiff = Infinity
+          let nearestValue = 0
+          
+          for (const [time, value] of map.entries()) {
+            const diff = Math.abs(time - targetTime)
+            if (diff <= tolerance && diff < minDiff) {
+              minDiff = diff
+              nearestValue = value
+            }
+          }
+          
+          return nearestValue
+        }
+
         // 충전 세션 분석
         const chargingSessions: Array<{
           start_time: Date,
@@ -57,16 +86,23 @@ export async function GET(
         }> = []
 
         let currentSession: any = null
-        const CHARGING_THRESHOLD = 0.1 // SOC 증가 임계값
-        const FAST_CHARGING_CURRENT = 50 // A
+        const CHARGING_THRESHOLD = 0.05 // SOC 증가 임계값
+        const CHARGING_CURRENT_MIN = 0.5 // A (충전 시작 최소 전류)
+        const FAST_CHARGING_CURRENT = 2 // A
 
         for (let i = 1; i < socData.length; i++) {
           const prevSoc = socData[i - 1].value
           const currSoc = socData[i].value
           const timeDiff = (socData[i].time.getTime() - socData[i - 1].time.getTime()) / (1000 * 60) // 분
 
+          // SOC 노이즈 제거 (±0.05% 이하는 무시)
+          const deltaSoc = currSoc - prevSoc
+          if (Math.abs(deltaSoc) < 0.05) continue
+                    
           // 충전 시작 감지 (SOC 증가)
-          if (currSoc > prevSoc + CHARGING_THRESHOLD && !currentSession) {
+          const currentNow = findNearestValue(currentMap, socData[i].time.getTime())
+          
+          if (currSoc > prevSoc + CHARGING_THRESHOLD && currentNow > CHARGING_CURRENT_MIN && !currentSession) {
             currentSession = {
               start_time: socData[i - 1].time,
               end_time: socData[i].time,
@@ -86,20 +122,35 @@ export async function GET(
             currentSession.duration_minutes += timeDiff
           }
           // 충전 종료 감지
-          else if (currentSession && (currSoc <= prevSoc || timeDiff > 30)) {
-            // 해당 시간대의 전류/전압 데이터 찾기
-            const sessionCurrents = currentData.filter(d => 
-              d.time >= currentSession.start_time && d.time <= currentSession.end_time
-            )
-            const sessionVoltages = voltageData.filter(d => 
-              d.time >= currentSession.start_time && d.time <= currentSession.end_time
-            )
+          else if (currentSession && (
+            currSoc <= prevSoc ||
+            currentNow <= 0.5 ||
+            timeDiff > 60         // 30분 이상 갭
+          )) {
+            // 전류·전압 값 매칭할 때 ±60초 허용 (Map 기반 빠른 조회)
+            const sessionStartTime = currentSession.start_time.getTime() - 60000
+            const sessionEndTime = currentSession.end_time.getTime() + 60000
+            
+            const sessionCurrents: number[] = []
+            const sessionVoltages: number[] = []
+            
+            currentMap.forEach((value, time) => {
+              if (time >= sessionStartTime && time <= sessionEndTime) {
+                sessionCurrents.push(value)
+              }
+            })
+            
+            voltageMap.forEach((value, time) => {
+              if (time >= sessionStartTime && time <= sessionEndTime) {
+                sessionVoltages.push(value)
+              }
+            })
 
             const avgCurrent = sessionCurrents.length > 0 
-              ? sessionCurrents.reduce((sum, d) => sum + d.value, 0) / sessionCurrents.length 
+              ? sessionCurrents.reduce((sum, v) => sum + v, 0) / sessionCurrents.length 
               : 0
             const avgVoltage = sessionVoltages.length > 0 
-              ? sessionVoltages.reduce((sum, d) => sum + d.value, 0) / sessionVoltages.length 
+              ? sessionVoltages.reduce((sum, v) => sum + v, 0) / sessionVoltages.length 
               : 0
 
             // 에너지 계산 (kWh)
@@ -171,3 +222,4 @@ export async function GET(
     );
   }
 }
+

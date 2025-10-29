@@ -1,21 +1,28 @@
 import { influxDB, org, bucket } from "@/lib/database"
 
 // Flux 쿼리 결과를 Promise 기반으로 받기 위한 헬퍼
-export const runQuery = (query: string) =>
+export const runQuery = (query: string, onRow?: (row: any) => void) =>
   new Promise<any[]>((resolve, reject) => {
     const queryApi = influxDB.getQueryApi(org)
     const rows: any[] = []
+
     queryApi.queryRows(query, {
       next(row, tableMeta) {
-        const o = tableMeta.toObject(row)
-        rows.push(o)
+        const record = tableMeta.toObject(row)
+
+        if (!record || record._value == null || record._value === "NaN") return
+        
+        // 콜백이 있으면 즉시 처리
+        if (onRow) onRow(record)
+        else rows.push(record)
       },
       error(err) {
+        console.error("InfluxDB Query Error:", err)
         reject(err)
       },
       complete() {
         resolve(rows)
-      }
+      },
     })
   })
 
@@ -44,22 +51,38 @@ export const getVehicleCounts = async (carTypes: string[] = ['BONGO3', 'GV60', '
     let gpsCount = 0
 
     try {
-      const bmsResult = await runQuery(bmsQuery)
-      for (const record of bmsResult) {
+      await runQuery(bmsQuery, (record) => {
         bmsCount += Number(record._value) || 0
-      }
+      })
     } catch (e) {
       console.error(`BMS count error for ${carType}:`, e)
     }
 
     try {
-      const gpsResult = await runQuery(gpsQuery)
-      for (const record of gpsResult) {
+      await runQuery(gpsQuery, (record) => {
         gpsCount += Number(record._value) || 0
-      }
+      })
     } catch (e) {
       console.error(`GPS count error for ${carType}:`, e)
     }
+
+    // try {
+    //   const bmsResult = await runQuery(bmsQuery)
+    //   for (const record of bmsResult) {
+    //     bmsCount += Number(record._value) || 0
+    //   }
+    // } catch (e) {
+    //   console.error(`BMS count error for ${carType}:`, e)
+    // }
+
+    // try {
+    //   const gpsResult = await runQuery(gpsQuery)
+    //   for (const record of gpsResult) {
+    //     gpsCount += Number(record._value) || 0
+    //   }
+    // } catch (e) {
+    //   console.error(`GPS count error for ${carType}:`, e)
+    // }
 
     detailedRecords[carType] = {
       BMS: bmsCount,
@@ -77,8 +100,12 @@ export const getAvgSocSoh = async (carTypes: string[] = ['BONGO3', 'GV60', 'PORT
   
   for (const carType of carTypes) {
     try {
-      // SOC, SOH 평균 계산
-      const socSohQuery = `
+      let socSum = 0, sohSum = 0
+      let socCount = 0, sohCount = 0
+      const deviceSet = new Set<string>()
+
+      // SOC & SOH 스트리밍 처리
+      await runQuery(`
         from(bucket: "${bucket}")
           |> range(start: 2022-01-01T00:00:00Z, stop: 2024-01-01T00:00:00Z)
           |> filter(fn: (r) => r._measurement == "aicar_bms")
@@ -86,45 +113,36 @@ export const getAvgSocSoh = async (carTypes: string[] = ['BONGO3', 'GV60', 'PORT
           |> filter(fn: (r) => r.car_type == "${carType}")
           |> filter(fn: (r) => exists r._value)
           |> keep(columns: ["_field", "_value"])
-      `
-      
-      // 고유 디바이스 수 계산
-      const deviceQuery = `
+      `, (row) => {
+        const val = Number(row._value)
+        if (Number.isFinite(val) && val >= 0 && val <= 100) {
+          if (row._field === "soc") { socSum += val; socCount++ }
+          else if (row._field === "soh") { sohSum += val; sohCount++ }
+        }
+      })
+
+      // 고유 디바이스 수 스트리밍 처리
+      await runQuery(`
         from(bucket: "${bucket}")
           |> range(start: 2022-01-01T00:00:00Z, stop: 2024-01-01T00:00:00Z)
           |> filter(fn: (r) => r._measurement == "aicar_bms")
           |> filter(fn: (r) => r.car_type == "${carType}")
           |> keep(columns: ["device_no"])
           |> distinct(column: "device_no")
-      `
-      
-      const [socSohRows, deviceRows] = await Promise.all([
-        runQuery(socSohQuery),
-        runQuery(deviceQuery)
-      ])
-      
-      const socValues: number[] = []
-      const sohValues: number[] = []
-      
-      for (const row of socSohRows) {
-        const val = Number(row._value)
-        if (Number.isFinite(val) && val >= 0 && val <= 100) {
-          if (row._field === "soc") socValues.push(val)
-          else if (row._field === "soh") sohValues.push(val)
-        }
-      }
-      
-      const avg_soc = socValues.length > 0 ? socValues.reduce((a, b) => a + b, 0) / socValues.length : 0
-      const avg_soh = sohValues.length > 0 ? sohValues.reduce((a, b) => a + b, 0) / sohValues.length : 0
-      const device_count = deviceRows.length // 고유 디바이스 수
-      
+      `, (row) => {
+        if (row.device_no) deviceSet.add(row.device_no)
+      })
+
+      const avg_soc = socCount > 0 ? socSum / socCount : 0
+      const avg_soh = sohCount > 0 ? sohSum / sohCount : 0
+      const device_count = deviceSet.size
+
       avgSocSohData[carType] = { avg_soc, avg_soh, device_count }
     } catch (e) {
       console.error(`Error processing ${carType}:`, e)
       avgSocSohData[carType] = { avg_soc: 0, avg_soh: 0, device_count: 0 }
     }
   }
-  
   return avgSocSohData
 }
 

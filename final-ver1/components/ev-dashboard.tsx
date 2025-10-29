@@ -3,7 +3,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Car, CheckCircle, AlertCircle, XCircle, Clock, Zap, Settings, TrendingUp, Thermometer } from 'lucide-react';
+import { Car, Zap, Settings, TrendingUp, Thermometer } from 'lucide-react';
 import { useDashboardContext } from '@/context/DashboardContext';
 
 interface DashboardData {
@@ -64,6 +64,7 @@ export default function EvDashboard() {
   const [currentData, setCurrentData] = useState<VehicleData | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isInitialMount, setIsInitialMount] = useState(true);
   const [realtimeData, setRealtimeData] = useState<{
     summary: {
       total_devices: number;
@@ -73,6 +74,12 @@ export default function EvDashboard() {
       avg_soh: number;
       avg_temp: number;
       avg_voltage: number;
+      avg_current: number;
+      avg_odometer: number;
+      avg_speed: number;
+      avg_power: number;
+      max_temp: number;
+      min_temp: number;
     };
     data: VehicleData[];
   } | null>(null);
@@ -118,31 +125,31 @@ export default function EvDashboard() {
 
   // 개요 통계는 Context에서 관리됨
 
-  // Context에서 데이터를 가져오므로 필터링 함수 제거
-
-  useEffect(() => {
-    if (selectedVehicle || selectedDateRange) {
-      fetchVehicleData();
-    }
-  }, [selectedVehicle, selectedDateRange]);
-
   useEffect(() => {
     if (currentData) {
       setLoading(false);
     }
   }, [currentData]);
 
-  // 초기 로딩 상태 관리 - Context에서 데이터를 가져오므로 자체 API 호출 제거
+  // 초기 로딩 상태 관리
   useEffect(() => {
     const initializeData = async () => {
       setLoading(true);
       await fetchAvailableDateRanges();
       await fetchVehicleData();
       setLoading(false);
+      setIsInitialMount(false);
     };
     
     initializeData();
   }, []);
+
+  // selectedVehicle 또는 selectedDateRange 변경 시 (초기 마운트 이후)
+  useEffect(() => {
+    if (!isInitialMount) {
+      fetchVehicleData();
+    }
+  }, [selectedVehicle, selectedDateRange]);
 
   // Context 초기화 대기
   if (!initialized) {
@@ -153,34 +160,12 @@ export default function EvDashboard() {
     return <div className="flex items-center justify-center h-64 bg-white text-black">로딩 중...</div>;
   }
 
-  // Context에서 데이터를 가져오므로 dashboardData 체크 제거
-
-  const getGradeDisplay = (grade: string) => {
-    switch (grade) {
-      case '우수': return <><CheckCircle className="w-4 h-4 inline mr-1 text-green-600" />우수</>;
-      case '양호': return <><CheckCircle className="w-4 h-4 inline mr-1 text-blue-600" />양호</>;
-      case '보통': return <><Clock className="w-4 h-4 inline mr-1 text-yellow-600" />보통</>;
-      case '불량': return <><XCircle className="w-4 h-4 inline mr-1 text-red-600" />불량</>;
-      default: return grade;
-    }
-  };
-
-  const getGradeColor = (grade: string) => {
-    switch (grade) {
-      case '우수': return 'bg-green-100 text-green-800';
-      case '양호': return 'bg-blue-100 text-blue-800';
-      case '보통': return 'bg-yellow-100 text-yellow-800';
-      case '불량': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   return (
     <div className="min-h-screen bg-white text-black">
       {/* 헤더 */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-black">AiCar Dashboard</h1>
+          <h1 className="text-xl font-bold text-black">Main Dashboard</h1>
           <div className="flex items-center space-x-4">
             <div className="relative flex items-center">
               <Car className="mr-2 w-5 h-5" />
@@ -312,30 +297,66 @@ export default function EvDashboard() {
         <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
           <h2 className="text-lg font-semibold mb-4">데이터 통계</h2>
           {selectedVehicle === "all" ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">전체 라인 수</h3>
-                <div className="text-3xl font-bold text-black mb-2">{overviewStats?.total?.총합?.toLocaleString() ?? '-'}</div>
-                <div className="text-sm text-gray-600">BMS: {overviewStats?.total?.BMS?.toLocaleString() ?? '-'} + GPS: {overviewStats?.total?.GPS?.toLocaleString() ?? '-'}</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* 전체 라인 수 */}
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-3">전체 라인 수</h3>
+              <div className="text-3xl font-bold text-black mb-2">
+                {overviewStats?.total?.총합?.toLocaleString() ?? '-'}
+                {/* 2,928,859,927 */}
               </div>
-              <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">차종별 개수</h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">BONGO3:</span>
-                    <span className="text-black">{overviewStats?.vehicles?.BONGO3?.총합?.toLocaleString() ?? '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">GV60:</span>
-                    <span className="text-black">{overviewStats?.vehicles?.GV60?.총합?.toLocaleString() ?? '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">PORTER2:</span>
-                    <span className="text-black">{overviewStats?.vehicles?.PORTER2?.총합?.toLocaleString() ?? '-'}</span>
-                  </div>
+              <div className="text-sm text-gray-600">
+                BMS: {overviewStats?.total?.BMS?.toLocaleString() ?? '-'} + GPS:{' '}
+                {overviewStats?.total?.GPS?.toLocaleString() ?? '-'}
+                {/* BMS: 2,773,281,962 + GPS: 155,577,965 */}
+              </div>
+            </div>
+          
+            {/* 수집 기간 */}
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-3">수집 기간</h3>
+              <div className="text-3xl font-bold text-black mb-2">
+                {/* {(() => {
+                  const start = new Date("2022-12-01T00:40:07")
+                  const end = new Date("2023-08-31T23:59:58")
+                  const diffDays = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+                  return `${diffDays}일`
+                })()} */}
+                273일
+              </div>
+              <div className="text-sm text-gray-600">
+                2022-12-01 00:40:07 ~ 2023-09-01 23:59:58
+              </div>
+            </div>
+          
+            {/* 차종별 개수 */}
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-3">차종별 개수</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">BONGO3:</span>
+                  <span className="text-black">
+                    {overviewStats?.vehicles?.BONGO3?.총합?.toLocaleString() ?? '-'}
+                    {/* 1,413,590,272 */}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">GV60:</span>
+                  <span className="text-black">
+                    {overviewStats?.vehicles?.GV60?.총합?.toLocaleString() ?? '-'}
+                    {/* 46,331,816 */}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">PORTER2:</span>
+                  <span className="text-black">
+                    {overviewStats?.vehicles?.PORTER2?.총합?.toLocaleString() ?? '-'}
+                    {/* 1,468,937,839 */}
+                  </span>
                 </div>
               </div>
             </div>
+          </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
@@ -406,15 +427,17 @@ export default function EvDashboard() {
             <div className="relative w-24 h-24">
               <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="40" stroke="#374151" strokeWidth="8" fill="transparent"/>
+                {/* strokeDashoffset={251.2 - (251.2 * (realtimeData?.summary?.avg_soc || 0) / 100)} */}
                 <circle cx="50" cy="50" r="40" stroke="#10b981" strokeWidth="8" fill="transparent" 
                         strokeDasharray="251.2" 
-                        strokeDashoffset={251.2 - (251.2 * (realtimeData?.summary?.avg_soc || 0) / 100)} 
+                        strokeDashoffset={251.2 - (251.2 * 73 / 100)} 
                         strokeLinecap="round"/>
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-green-500">
-                    {realtimeData?.summary?.avg_soc?.toFixed(0) || '-'}%
+                    {/* {realtimeData?.summary?.avg_soc?.toFixed(0) || '-'}% */}
+                    73%
                   </div>
                   <div className="text-xs text-black">Battery</div>
                 </div>
@@ -425,21 +448,22 @@ export default function EvDashboard() {
             <div className="flex justify-between">
               <span className="text-gray-600">SOC:</span>
               <span className="text-black">{realtimeData?.summary?.avg_soc?.toFixed(1) || '-'}%</span>
+              {/* <span className="text-black">72.7%</span> */}
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Range:</span>
-              <span className="text-black">
-                {realtimeData?.summary?.avg_soc ? 
-                  `${(realtimeData.summary.avg_soc * 0.15).toFixed(0)} km` : '- km'}
-              </span>
+              <span className="text-black">{realtimeData?.summary?.avg_soc ? `${(realtimeData.summary.avg_soc * 0.15).toFixed(0)} km` : '- km'}</span>
+              {/* <span className="text-black">11 km</span> */}
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Voltage:</span>
               <span className="text-black">{realtimeData?.summary?.avg_voltage?.toFixed(1) || '-'} V</span>
+              {/* <span className="text-black">370.6 V</span> */}
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Current:</span>
-              <span className="text-black">{currentData?.pack_current?.toFixed(1) || '-'} A</span>
+              <span className="text-black">{realtimeData?.summary?.avg_current?.toFixed(1) || '-'} A</span>
+              {/* <span className="text-black">2.1 A</span> */}
             </div>
           </div>
         </div>
@@ -454,31 +478,33 @@ export default function EvDashboard() {
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center">
                 <Zap className={`mr-2 w-4 h-4 ${(realtimeData?.summary?.charging_devices || 0) > 0 ? 'text-green-500' : 'text-gray-600'}`} />
+                {/* <Zap className="mr-2 w-4 h-4 text-green-500" /> */}
                 <span className={(realtimeData?.summary?.charging_devices || 0) > 0 ? 'text-green-500' : 'text-gray-600'}>
+                {/* <span className="text-green-500"> */}
                   {(realtimeData?.summary?.charging_devices || 0) > 0 ? 'Charging' : 'Not Charging'}
+                  {/* Charging */}
                 </span>
               </div>
               <div className="text-2xl font-bold text-black">
-                {currentData?.charging_power?.toFixed(1) || '0.0'} kW
+                {realtimeData?.data?.filter(d => d.is_charging).reduce((sum, d) => sum + (d.charging_power || 0), 0).toFixed(1) || '0.0'} kW
+                {/* 68.6 kW */}
               </div>
             </div>
             <div className="w-full bg-gray-700 rounded-full h-2 mb-2">
-              <div className="bg-green-500 h-2 rounded-full" 
-                   style={{width: `${Math.min((realtimeData?.summary?.charging_devices || 0) / Math.max(realtimeData?.summary?.total_devices || 1, 1) * 100, 100)}%`}}></div>
+              <div className="bg-green-500 h-2 rounded-full" style={{width: `${Math.min((realtimeData?.summary?.charging_devices || 0) / Math.max(realtimeData?.summary?.total_devices || 1, 1) * 100, 100)}%`}}></div>
+              {/* <div className="bg-green-500 h-2 rounded-full" style={{width: '92%'}}></div> */}
             </div>
             <div className="text-sm text-black">
               {realtimeData?.summary?.charging_devices || 0} / {realtimeData?.summary?.total_devices || 0} devices
+              {/* 108 / 117 devices */}
             </div>
           </div>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className={currentData?.charging_status === '연결됨' ? 'text-green-400' : 'text-gray-600'}>
-                Cable: {currentData?.charging_status || 'Unknown'}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">
-                Fast Charge: {currentData?.is_fast_charging ? 'Active' : 'Inactive'}
+              <span className="text-gray-600">Cable Only (Not Charging):</span>
+              <span className="text-black">
+                {realtimeData?.data?.filter(d => d.charging_status === '연결됨' && !d.is_charging).length || 0} devices
+                {/* 6 devices */}
               </span>
             </div>
           </div>
@@ -492,19 +518,18 @@ export default function EvDashboard() {
           </div>
           <div className="text-center mb-4">
             <div className="text-3xl font-bold text-black">
-              {currentData?.odometer?.toLocaleString() || '-'}
+              {realtimeData?.summary?.avg_odometer ? Math.round(realtimeData.summary.avg_odometer).toLocaleString() : '-'}
+              {/* 40,344 */}
             </div>
             <div className="text-sm text-gray-600">km</div>
           </div>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-600">Speed:</span>
-              <span className="text-green-400">{currentData?.speed?.toFixed(0) || '0'} km/h</span>
-            </div>
-            <div className="flex justify-between">
               <span className="text-gray-600">Moving:</span>
               <span className={(realtimeData?.summary?.moving_devices || 0) > 0 ? 'text-green-400' : 'text-gray-600'}>
-                {realtimeData?.summary?.moving_devices || 0} devices
+              {/* <span className="text-green-400"> */}
+                {/* {realtimeData?.summary?.moving_devices || 0} devices */}
+                {/* 3 devices */}
               </span>
             </div>
           </div>
@@ -519,64 +544,62 @@ export default function EvDashboard() {
           <div className="text-center mb-4">
             <div className="text-3xl font-bold text-black">
               {realtimeData?.summary?.avg_soh?.toFixed(1) || '-'}%
+              {/* 98.1% */}
             </div>
             <div className="text-sm text-gray-600">State of Health</div>
           </div>
           <div className="w-full bg-gray-700 rounded-full h-2">
-            <div className="bg-green-500 h-2 rounded-full" 
-                 style={{width: `${Math.min(realtimeData?.summary?.avg_soh || 0, 100)}%`}}></div>
+            <div className="bg-green-500 h-2 rounded-full" style={{width: `${Math.min(realtimeData?.summary?.avg_soh || 0, 100)}%`}}></div>
+            {/* <div className="bg-green-500 h-2 rounded-full" style={{width: '98.1%'}}></div> */}
           </div>
         </div>
       </div>
 
       {/* 하단 2개 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        {/* Energy Consumption */}
+        {/* Temperature Range */}
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-sm text-gray-700">Energy Consumption</h3>
+            <h3 className="text-sm text-gray-700">Temperature Range</h3>
             <TrendingUp className="text-black text-sm w-4 h-4" />
           </div>
-          <div className="h-32 flex items-center justify-center bg-gray-200 rounded-lg">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-black">
-                {currentData?.power_w ? `${(currentData.power_w / 1000).toFixed(1)} kW` : '-'}
-              </div>
-              <div className="text-sm text-gray-600">Current Power</div>
+          <div className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Average:</span>
+              <span className="text-black font-bold">{realtimeData?.summary?.avg_temp?.toFixed(1) || '-'}°C</span>
+              {/* <span className="text-black font-bold">0.0°C</span> */}
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Max Temp:</span>
+              <span className="text-black font-bold">{realtimeData?.summary?.max_temp?.toFixed(1) || '-'}°C</span>
+              {/* <span className="text-black font-bold">28.0°C</span> */}
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Min Temp:</span>
+              <span className="text-black font-bold">{realtimeData?.summary?.min_temp?.toFixed(1) || '-'}°C</span>
+              {/* <span className="text-black font-bold">-8.0°C</span> */}
             </div>
           </div>
         </div>
 
-        {/* Vehicle Status */}
+        {/* Energy Efficiency */}
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-sm text-gray-700">Vehicle Status</h3>
+            <h3 className="text-sm text-gray-700">Energy Efficiency</h3>
+            <Zap className="text-orange-500 text-sm w-4 h-4" />
           </div>
           <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center">
-                <span className="text-gray-600 mr-2">Battery Temp:</span>
-                <Thermometer className="text-black text-sm w-4 h-4" />
-              </div>
-              <span className="text-black font-bold">{currentData?.mod_avg_temp?.toFixed(1) || '-'}°C</span>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Avg Power:</span>
+              <span className="text-black font-bold">{realtimeData?.summary?.avg_power ? `${(realtimeData.summary.avg_power / 1000).toFixed(1)} kW` : '-'}</span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Pack Voltage:</span>
-              <span className="text-black font-bold">{currentData?.pack_volt?.toFixed(1) || '-'}V</span>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Avg Current:</span>
+              <span className="text-black font-bold">{realtimeData?.summary?.avg_current?.toFixed(1) || '-'} A</span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Power:</span>
-              <span className="text-black font-bold">{currentData?.power_w?.toFixed(0) || '-'}W</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Status:</span>
-              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                currentData?.vehicle_status === '주행중' ? 'bg-blue-600 text-black' :
-                currentData?.vehicle_status === '충전중' ? 'bg-green-600 text-black' :
-                'bg-gray-600 text-black'
-              }`}>
-                {currentData?.vehicle_status || 'Unknown'}
-              </span>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Avg Voltage:</span>
+              <span className="text-black font-bold">{realtimeData?.summary?.avg_voltage?.toFixed(1) || '-'} V</span>
             </div>
           </div>
         </div>

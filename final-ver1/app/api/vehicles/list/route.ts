@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { influxDB, org, bucket } from "@/lib/database"
-import { runQuery } from "@/lib/dashboard-utils"
+// import { runQuery } from "@/lib/dashboard-utils"
 
 export async function GET() {
   try {
@@ -14,11 +14,23 @@ export async function GET() {
         |> distinct(column: "device_no")
     `
 
-    const rows = await runQuery(query)
-    const devices = rows
-      .map((r: any) => r.device_no)
-      .filter((v: any) => typeof v === 'string')
-      .sort()
+    const devices: string[] = []
+
+    await new Promise<void>((resolve, reject) => {
+      const queryApi = influxDB.getQueryApi(org)
+      queryApi.queryRows(query, {
+        next(row, tableMeta) {
+          const record = tableMeta.toObject(row)
+          if (record.device_no && typeof record.device_no === "string") {
+            devices.push(record.device_no)
+          }
+        },
+        error: reject,
+        complete: resolve,
+      })
+    })
+
+    devices.sort()
 
     return NextResponse.json({ success: true, devices })
   } catch (error) {

@@ -7,7 +7,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const carType = searchParams.get('car_type') || 'ALL'
     
-    const queryApi = influxDB.getQueryApi(org)
+    // const queryApi = influxDB.getQueryApi(org)
 
     // 최신 배터리 상태 데이터 가져오기
     const latestBatteryQuery = `
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
         |> range(start: 2022-01-01T00:00:00Z, stop: 2024-01-01T00:00:00Z)
         |> filter(fn: (r) => r._measurement == "aicar_bms")
         ${carType !== 'ALL' ? `|> filter(fn: (r) => r.car_type == "${carType}")` : ''}
-        |> filter(fn: (r) => r._field == "soc" or r._field == "soh" or r._field == "pack_volt" or r._field == "pack_current" or r._field == "mod_avg_temp" or r._field == "odometer")
+        |> filter(fn: (r) => r._field == "soc" or r._field == "soh" or r._field == "pack_volt" or r._field == "pack_current" or r._field == "mod_avg_temp" or r._field == "mod_temp" or r._field == "mod_max_temp" or r._field == "mod_min_temp" or r._field == "batt_internal_temp" or r._field == "odometer")
         |> filter(fn: (r) => exists r._value)
         |> sort(columns: ["_time"], desc: true)
     `
@@ -41,69 +41,49 @@ export async function GET(request: Request) {
         |> filter(fn: (r) => exists r._value)
         |> sort(columns: ["_time"], desc: true)
     `
-
-    const [batteryRows, chargingRows, gpsRows] = await Promise.all([
-      runQuery(latestBatteryQuery),
-      runQuery(chargingStatusQuery),
-      runQuery(latestGpsQuery)
-    ])
-
-    // 배터리 데이터 처리
+    // 미리 기초 객체 생성
     const deviceData: Record<string, any> = {}
-    
-    for (const row of batteryRows) {
-      const deviceNo = row.device_no
-      const field = row._field
-      const value = Number(row._value)
-      const time = row._time
-      
-      if (!deviceData[deviceNo]) {
-        deviceData[deviceNo] = {
-          device_no: deviceNo,
-          car_type: row.car_type,
-          last_updated: time
-        }
-      }
-      
-      if (Number.isFinite(value)) {
-        deviceData[deviceNo][field] = value
-        deviceData[deviceNo].last_updated = time > deviceData[deviceNo].last_updated ? time : deviceData[deviceNo].last_updated
-      }
-    }
-
-    // 충전 상태 데이터 처리
     const chargingData: Record<string, any> = {}
-    
-    for (const row of chargingRows) {
-      const deviceNo = row.device_no
-      const field = row._field
-      const value = Number(row._value)
-      
-      if (!chargingData[deviceNo]) {
-        chargingData[deviceNo] = {}
-      }
-      
-      if (Number.isFinite(value)) {
-        chargingData[deviceNo][field] = value
-      }
-    }
-
-    // GPS 데이터 처리
     const gpsData: Record<string, any> = {}
-    
-    for (const row of gpsRows) {
-      const deviceNo = row.device_no
-      const field = row._field
-      const value = Number(row._value)
-      
-      if (!gpsData[deviceNo]) {
-        gpsData[deviceNo] = {}
-      }
-      
-      if (Number.isFinite(value)) {
-        gpsData[deviceNo][field] = value
-      }
-    }
+
+    // 스트리밍 방식으로 row 처리
+    await Promise.all([
+      runQuery(latestBatteryQuery, (row) => {
+        const deviceNo = row.device_no
+        const field = row._field
+        const value = Number(row._value)
+        const time = row._time
+        const temp_fields = ['mod_avg_temp', 'mod_max_temp', 'mod_min_temp']
+
+        if (!deviceData[deviceNo]) {
+          deviceData[deviceNo] = { device_no: deviceNo, car_type: row.car_type, last_updated: time }
+        }
+        if (Number.isFinite(value)) {
+          // 온도 필드
+          if (temp_fields.includes(field)) {
+            deviceData[deviceNo][field] = value
+          } else if (['soc', 'soh', 'pack_volt', 'pack_current', 'odometer'].includes(field)) {
+            deviceData[deviceNo][field] = value
+          }
+        }
+      }),
+
+      runQuery(chargingStatusQuery, (row) => {
+        const deviceNo = row.device_no
+        const field = row._field
+        const value = Number(row._value)
+        if (!chargingData[deviceNo]) chargingData[deviceNo] = {}
+        if (Number.isFinite(value)) chargingData[deviceNo][field] = value
+      }),
+
+      runQuery(latestGpsQuery, (row) => {
+        const deviceNo = row.device_no
+        const field = row._field
+        const value = Number(row._value)
+        if (!gpsData[deviceNo]) gpsData[deviceNo] = {}
+        if (Number.isFinite(value)) gpsData[deviceNo][field] = value
+      })
+    ])
 
     // 디바이스별 통합 데이터 생성
     const devices = Object.keys(deviceData).map(deviceNo => {
@@ -120,7 +100,6 @@ export async function GET(request: Request) {
       )
       
       const vehicleStatus = getVehicleStatus(gps.speed || 0, chargingStatus.isCharging)
-      console.log('vehicleStatus:', vehicleStatus)
       
       return {
         vehicle_id: deviceNo,
@@ -130,6 +109,9 @@ export async function GET(request: Request) {
         pack_volt: battery.pack_volt || 0,
         pack_current: battery.pack_current || 0,
         mod_avg_temp: battery.mod_avg_temp || 0,
+        mod_max_temp: battery.mod_max_temp || 0,
+        mod_min_temp: battery.mod_min_temp || 0,
+        batt_internal_temp: battery.batt_internal_temp || 0,
         odometer: battery.odometer || 0,
         speed: gps.speed || 0,
         lat: gps.lat || null,
@@ -154,8 +136,16 @@ export async function GET(request: Request) {
     const movingDevices = devices.filter(d => d.is_moving).length
     const avgSoc = devices.length > 0 ? devices.reduce((sum, d) => sum + d.latest_soc, 0) / devices.length : 0
     const avgSoh = devices.length > 0 ? devices.reduce((sum, d) => sum + d.latest_soh, 0) / devices.length : 0
+    // 온도 통계 계산 (모듈 온도 기준) - null/NaN 그대로 유지
     const avgTemp = devices.length > 0 ? devices.reduce((sum, d) => sum + d.mod_avg_temp, 0) / devices.length : 0
+    const maxTemp = devices.length > 0 ? Math.max(...devices.map(d => d.mod_max_temp)) : 0
+    const minTemp = devices.length > 0 ? Math.min(...devices.map(d => d.mod_min_temp)) : 0
+    
     const avgVoltage = devices.length > 0 ? devices.reduce((sum, d) => sum + d.pack_volt, 0) / devices.length : 0
+    const avgCurrent = devices.length > 0 ? devices.reduce((sum, d) => sum + Math.abs(d.pack_current), 0) / devices.length : 0
+    const avgOdometer = devices.length > 0 ? devices.reduce((sum, d) => sum + d.odometer, 0) / devices.length : 0
+    const avgSpeed = devices.length > 0 ? devices.reduce((sum, d) => sum + (d.speed || 0), 0) / devices.length : 0
+    const avgPower = devices.length > 0 ? devices.reduce((sum, d) => sum + d.power_w, 0) / devices.length : 0
 
     return NextResponse.json({
       success: true,
@@ -167,7 +157,13 @@ export async function GET(request: Request) {
         avg_soc: avgSoc,
         avg_soh: avgSoh,
         avg_temp: avgTemp,
-        avg_voltage: avgVoltage
+        avg_voltage: avgVoltage,
+        avg_current: avgCurrent,
+        avg_odometer: avgOdometer,
+        avg_speed: avgSpeed,
+        avg_power: avgPower,
+        max_temp: maxTemp,
+        min_temp: minTemp
       },
       car_type: carType,
       timestamp: new Date().toISOString()
