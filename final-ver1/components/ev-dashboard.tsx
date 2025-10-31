@@ -70,6 +70,9 @@ export default function EvDashboard() {
       total_devices: number;
       charging_devices: number;
       moving_devices: number;
+      cable_only_devices: number;
+      disconnected_devices: number;
+      unknown_devices: number;
       avg_soc: number;
       avg_soh: number;
       avg_temp: number;
@@ -436,8 +439,8 @@ export default function EvDashboard() {
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-green-500">
-                    {/* {realtimeData?.summary?.avg_soc?.toFixed(0) || '-'}% */}
-                    73%
+                    {realtimeData?.summary?.avg_soc?.toFixed(0) || '-'}%
+                    {/* 73% */}
                   </div>
                   <div className="text-xs text-black">Battery</div>
                 </div>
@@ -457,8 +460,8 @@ export default function EvDashboard() {
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Voltage:</span>
-              <span className="text-black">{realtimeData?.summary?.avg_voltage?.toFixed(1) || '-'} V</span>
-              {/* <span className="text-black">370.6 V</span> */}
+              {/* <span className="text-black">{realtimeData?.summary?.avg_voltage?.toFixed(1) || '-'} V</span> */}
+              <span className="text-black">370.6 V</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Current:</span>
@@ -501,11 +504,16 @@ export default function EvDashboard() {
           </div>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-600">Cable Only (Not Charging):</span>
-              <span className="text-black">
-                {realtimeData?.data?.filter(d => d.charging_status === '연결됨' && !d.is_charging).length || 0} devices
-                {/* 6 devices */}
-              </span>
+              <span className="text-gray-600">Cable Only:</span>
+              <span className="text-black">{realtimeData?.summary?.cable_only_devices || 0} devices</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Disconnected:</span>
+              <span className="text-black">{realtimeData?.summary?.disconnected_devices || 0} devices</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Unknown:</span>
+              <span className="text-black">{realtimeData?.summary?.unknown_devices || 0} devices</span>
             </div>
           </div>
         </div>
@@ -528,7 +536,7 @@ export default function EvDashboard() {
               <span className="text-gray-600">Moving:</span>
               <span className={(realtimeData?.summary?.moving_devices || 0) > 0 ? 'text-green-400' : 'text-gray-600'}>
               {/* <span className="text-green-400"> */}
-                {/* {realtimeData?.summary?.moving_devices || 0} devices */}
+                {realtimeData?.summary?.moving_devices || 0} devices
                 {/* 3 devices */}
               </span>
             </div>
