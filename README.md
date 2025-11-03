@@ -132,7 +132,13 @@ v0-battery/
 ### 📊 메인 대시보드
 전체 차량 현황을 한눈에 파악할 수 있는 통합 대시보드
 
-![메인 대시보드](https://github.com/user-attachments/assets/533b67bd-093b-4b08-b1fc-93916d98f7a0)
+![전체 흐름](https://github.com/user-attachments/assets/b7be882a-85aa-495a-a8ff-8bef624fd33f)
+
+![데이터 통계](https://github.com/user-attachments/assets/95bb115f-7b17-43c7-97e2-7fe8d8b5a550)
+
+![데이터 필드](https://github.com/user-attachments/assets/979e19bb-0f59-4de3-8e4f-f31fce1cbb00)
+
+![요약 기능 분석](https://github.com/user-attachments/assets/19c98d7e-3985-4cd5-89c3-26424626b0aa)
 
 **주요 기능:**
 - 📈 데이터 통계: 전체 라인 수, 차종별 데이터 수집 현황
@@ -143,8 +149,6 @@ v0-battery/
 
 ### 🚗 개별 차량 분석
 차량별 상세 정보 및 성능 모니터링 페이지
-
-![개별 차량 분석](https://github.com/user-attachments/assets/2e85b482-e8ce-4477-9163-29537a9fd2be)
 
 **주요 기능:**
 - 📋 **차종별 현황**: 차량 유형별 등록 현황 및 데이터 수집 상태
