@@ -150,6 +150,8 @@ v0-battery/
 ### 🚗 개별 차량 분석
 차량별 상세 정보 및 성능 모니터링 페이지
 
+![데이터 통계](https://github.com/user-attachments/assets/bbb15cb1-f5ec-436b-b8c5-84dffc78afb4)
+
 **주요 기능:**
 - 📋 **차종별 현황**: 차량 유형별 등록 현황 및 데이터 수집 상태
 - 🆔 **디바이스 목록**: 차량 ID별 상세 정보 (SOC, SOH, 등급)
