@@ -6,7 +6,7 @@ import { DashboardProvider } from '@/context/DashboardContext'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'EV Battery Monitoring System',
+  title: '🔋 EV Battery Monitoring System',
   description: '전기차 배터리 모니터링 및 분석 시스템',
 }
 
