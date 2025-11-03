@@ -236,7 +236,6 @@ export async function GET(request: Request) {
     })
 
   } catch (error) {
-    console.error("Dashboard Analytics API Error:", error)
     return NextResponse.json({ 
       success: false,
       error: "InfluxDB 연결 실패",
