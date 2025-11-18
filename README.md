@@ -1,8 +1,11 @@
-# 🔋 전기차 배터리 데이터 분석 및 시각화 시스템
+# 🔋 전기차 배터리 데이터 분석 및 시각화 시스템 
 
 ## 📋 프로젝트 개요
 
 **프로젝트명:** 전기차 배터리 데이터 분석 및 시각화 대시보드
+
+**개발 기간**: 2025년 10월 ~ 현재  
+**개발 환경 및 언어**: Linux (Ubuntu), Docker, Node.js, TypeScript, JavaScript, CSS, Python, SQL 
 
 **배경 및 목표:**
 
@@ -13,7 +16,7 @@
 
 - **목표:** 
   - InfluxDB를 활용한 시계열 배터리 데이터 수집 및 저장
-  - 머신러닝 기반 SOH(State of Health) 예측 및 이상 탐지 시스템 구축
+  - 머신러닝/딥러닝 기반 SOH(State of Health) 예측 및 이상 탐지 시스템 구축
   - 실시간 대시보드를 통한 배터리 상태 모니터링 및 시각화
   - 차량별 성능 분석 및 운전 패턴 기반 최적화 제안
 
@@ -209,24 +212,6 @@ v0-battery/
 - `device_no`: 차량 식별자
 - `car_type`: 차량 모델 (BONGO3, GV60, PORTER2)
 
-## 📝 API 엔드포인트
-
-### 분석 API
-- `GET /api/analytics/anomaly-detection` - 이상 탐지 분석
-- `GET /api/analytics/soh-prediction` - SOH 예측 결과
-- `GET /api/analytics/soh-prediction-ml` - ML 기반 SOH 예측
-- `GET /api/analytics/vehicle-scoring` - 차량 성능 점수
-
-### 차량 데이터 API
-- `GET /api/vehicles/list` - 등록된 차량 목록
-- `GET /api/vehicles/driving-patterns/[device_no]` - 주행 패턴 분석
-- `GET /api/vehicles/driving-patterns/battery/[device_no]` - 배터리 데이터
-- `GET /api/vehicles/driving-patterns/segments/[device_no]` - 구간별 분석
-
-### 대시보드 API
-- `GET /api/dashboard` - 대시보드 메인 데이터
-- `GET /api/dashboard/analytics` - 분석 결과 요약
-
 ## 🔄 개발 워크플로우
 
 ### 데이터 분석 파이프라인
@@ -254,7 +239,3 @@ v0-battery/
 - **배치 처리**: 대용량 데이터의 효율적인 배치 처리
 - **압축**: 시계열 데이터 압축으로 저장 공간 절약
 - **샘플링**: 실시간 분석을 위한 적절한 데이터 샘플링
-
-
-**개발 기간**: 2025년 9월 ~ 현재  
-**개발 환경**: Linux (Ubuntu), Docker, Node.js, Python  
